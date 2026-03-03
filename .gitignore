@@ -1,0 +1,19 @@
+# Next.js
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Local environment (copy .env.local.example → .env.local)
+.env.local
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
