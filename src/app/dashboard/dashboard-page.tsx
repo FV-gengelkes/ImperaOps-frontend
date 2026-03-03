@@ -253,12 +253,9 @@ export default function DashboardPage() {
         safetyViolation: Math.round(l.count * 0.10),
       }));
 
-  const thisMonthTrend: number | undefined = (() => {
-    if (!isLive) return undefined;
-    const last = analytics!.lastMonth;
-    if (last === 0) return undefined;
-    return ((analytics!.thisMonth - last) / last) * 100;
-  })();
+  const thisMonthTrend = isLive && analytics!.lastMonth !== 0
+    ? ((analytics!.thisMonth - analytics!.lastMonth) / analytics!.lastMonth) * 100
+    : undefined;
 
   const total = isLive ? analytics!.total : mockKpi.total;
 
