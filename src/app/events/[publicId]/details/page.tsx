@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import IncidentDetailsPage from "./incident-details-page";
+import EventDetailsPage from "./event-details-page";
 
 export default function Page() {
   return (
     <Suspense>
-      <IncidentDetailsPage />
+      <EventDetailsPage />
     </Suspense>
   );
 }

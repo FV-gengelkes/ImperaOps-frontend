@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, FlaskConical } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
-import { getClientUsers, getLookups } from "@/lib/api";
-import type { ClientUserDto, IncidentLookupDto } from "@/lib/types";
+import { getClientUsers, getEventTypes, getWorkflowStatuses, getRootCauseTaxonomy } from "@/lib/api";
+import type { ClientUserDto, EventTypeDto, WorkflowStatusDto, RootCauseTaxonomyItemDto } from "@/lib/types";
 
 function nowIsoFromLocalInput(v: string) {
   const d = new Date(v);
@@ -17,7 +17,7 @@ const inputBase =
   "placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed";
 
 const inputCls = inputBase +
-  " border border-slate-200 focus:ring-indigo-500/40 focus:border-indigo-400";
+  " border border-slate-200 focus:ring-brand/40 focus:border-brand";
 
 const inputErrCls = inputBase +
   " border border-red-400 focus:ring-red-400/30 focus:border-red-400";
@@ -63,65 +63,76 @@ function SkeletonField() {
 
 type Props = {
   mode: "create" | "edit";
-  id: string;
   loading: boolean;
   fetching: boolean;
-  type: number;
-  status: number;
+  title: string;
+  eventTypeId: number;
+  workflowStatusId: number;
   occurredAt: string;
   location: string;
   description: string;
-  ownerUserId: string | null;
-  reportedByUserId: string;
+  ownerUserId: number | null;
   reportedByDisplayName: string | null;
+  externalReporterName?: string | null;
+  externalReporterContact?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  rootCauseId: number | null;
+  correctiveAction: string | null;
 
-  setType: (v: number) => void;
-  setStatus: (v: number) => void;
+  setTitle: (v: string) => void;
+  setEventTypeId: (v: number) => void;
+  setWorkflowStatusId: (v: number) => void;
   setOccurredAt: (v: string) => void;
   setLocation: (v: string) => void;
   setDescription: (v: string) => void;
-  setOwnerUserId: (v: string | null) => void;
+  setOwnerUserId: (v: number | null) => void;
+  setRootCauseId: (v: number | null) => void;
+  setCorrectiveAction: (v: string | null) => void;
 
   submitted: boolean;
   onSave: () => Promise<void> | void;
   saveError: string;
-  success: string;
+  readOnly?: boolean;
 };
 
 // ── Form ──────────────────────────────────────────────────────────
 
-export function IncidentDetailsForm(props: Props) {
+export function EventDetailsForm(props: Props) {
   const {
-    mode, id, loading, fetching,
-    type, status, occurredAt, location, description, ownerUserId,
-    reportedByUserId, reportedByDisplayName, createdAt, updatedAt,
-    setType, setStatus, setOccurredAt, setLocation, setDescription, setOwnerUserId,
-    submitted, onSave, saveError, success,
+    mode, loading, fetching,
+    title, eventTypeId, workflowStatusId, occurredAt, location, description, ownerUserId,
+    reportedByDisplayName, externalReporterName, externalReporterContact, createdAt, updatedAt,
+    rootCauseId, correctiveAction,
+    setTitle, setEventTypeId, setWorkflowStatusId, setOccurredAt, setLocation, setDescription, setOwnerUserId,
+    setRootCauseId, setCorrectiveAction,
+    submitted, onSave, saveError, readOnly,
   } = props;
 
   const { clientId } = useClientId();
   const isNew = mode === "create";
 
-  const [typeOptions, setTypeOptions] = useState<IncidentLookupDto[]>([]);
-  const [statusOptions, setStatusOptions] = useState<IncidentLookupDto[]>([]);
-  const [userOptions, setUserOptions] = useState<ClientUserDto[]>([]);
+  const [typeOptions, setTypeOptions]     = useState<EventTypeDto[]>([]);
+  const [statusOptions, setStatusOptions] = useState<WorkflowStatusDto[]>([]);
+  const [userOptions, setUserOptions]     = useState<ClientUserDto[]>([]);
+  const [rootCauseOptions, setRootCauseOptions] = useState<RootCauseTaxonomyItemDto[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(false);
 
   useEffect(() => {
     if (!clientId) return;
     setLookupsLoading(true);
     Promise.all([
-      getLookups(clientId, "incident_type"),
-      getLookups(clientId, "status"),
+      getEventTypes(clientId),
+      getWorkflowStatuses(clientId),
       getClientUsers(clientId),
-    ]).then(([types, statuses, users]) => {
+      getRootCauseTaxonomy(clientId).catch(() => []),
+    ]).then(([types, statuses, users, rootCauses]) => {
       setTypeOptions(types);
       setStatusOptions(statuses);
-      setUserOptions(users);
+      setUserOptions(users.filter(u => u.isActive && !u.isSuperAdmin));
+      setRootCauseOptions(rootCauses as RootCauseTaxonomyItemDto[]);
     }).catch(() => {
-      // Fall through — selects stay empty
+      // selects stay empty
     }).finally(() => {
       setLookupsLoading(false);
     });
@@ -135,7 +146,21 @@ export function IncidentDetailsForm(props: Props) {
         <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 mb-6">
           <MetaItem
             label="Reported By"
-            value={reportedByDisplayName ?? "—"}
+            value={
+              reportedByDisplayName
+                ? reportedByDisplayName
+                : externalReporterName
+                  ? (
+                    <span>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 mr-1.5">External</span>
+                      {externalReporterName}
+                      {externalReporterContact && (
+                        <span className="block text-xs text-slate-400 mt-0.5">{externalReporterContact}</span>
+                      )}
+                    </span>
+                  )
+                  : <span className="italic text-slate-400">External Submission</span>
+            }
           />
           {createdAt && (
             <MetaItem label="Created" value={new Date(createdAt).toLocaleString()} />
@@ -156,6 +181,7 @@ export function IncidentDetailsForm(props: Props) {
             <SkeletonField />
           </div>
           <SkeletonField />
+          <SkeletonField />
           <div className="flex flex-col gap-1.5">
             <div className="h-3 w-24 bg-slate-100 rounded animate-pulse" />
             <div className="h-32 bg-slate-100 rounded-xl animate-pulse" />
@@ -166,23 +192,38 @@ export function IncidentDetailsForm(props: Props) {
 
         /* ── Form ───────────────────────────────────────────────── */
         <form
-          onSubmit={(e) => { e.preventDefault(); void onSave(); }}
+          onSubmit={(e) => { e.preventDefault(); if (!readOnly) void onSave(); }}
           className="space-y-5"
         >
+          <fieldset disabled={!!readOnly} className="contents">
+          {/* Title */}
+          <Field
+            label="Title"
+            required
+            error={submitted && !title.trim() ? "Title is required." : undefined}
+          >
+            <input
+              className={submitted && !title.trim() ? inputErrCls : inputCls}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Brief summary of the event"
+            />
+          </Field>
+
           {/* Row 1: Type + Occurred At */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Incident Type">
+            <Field label="Event Type">
               <select
                 className={inputCls}
-                value={type}
-                onChange={(e) => setType(Number(e.target.value))}
+                value={eventTypeId}
+                onChange={(e) => setEventTypeId(Number(e.target.value))}
                 disabled={lookupsLoading}
               >
                 {lookupsLoading ? (
                   <option>Loading…</option>
                 ) : (
-                  typeOptions.map(l => (
-                    <option key={l.id} value={l.value}>{l.label}</option>
+                  typeOptions.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
                   ))
                 )}
               </select>
@@ -204,15 +245,15 @@ export function IncidentDetailsForm(props: Props) {
               <Field label="Status">
                 <select
                   className={inputCls}
-                  value={status}
-                  onChange={(e) => setStatus(Number(e.target.value))}
+                  value={workflowStatusId}
+                  onChange={(e) => setWorkflowStatusId(Number(e.target.value))}
                   disabled={lookupsLoading}
                 >
                   {lookupsLoading ? (
                     <option>Loading…</option>
                   ) : (
-                    statusOptions.map(l => (
-                      <option key={l.id} value={l.value}>{l.label}</option>
+                    statusOptions.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))
                   )}
                 </select>
@@ -222,7 +263,7 @@ export function IncidentDetailsForm(props: Props) {
                 <select
                   className={inputCls}
                   value={ownerUserId ?? ""}
-                  onChange={(e) => setOwnerUserId(e.target.value || null)}
+                  onChange={(e) => setOwnerUserId(e.target.value ? Number(e.target.value) : null)}
                   disabled={lookupsLoading}
                 >
                   <option value="">— Unassigned —</option>
@@ -263,19 +304,51 @@ export function IncidentDetailsForm(props: Props) {
             />
           </Field>
 
+          {/* Investigation card — edit mode only */}
+          {!isNew && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <FlaskConical size={14} className="text-slate-400" />
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Investigation</span>
+              </div>
+
+              <Field label="Root Cause">
+                {rootCauseOptions.length === 0 ? (
+                  <select className={inputCls} disabled>
+                    <option>No root causes defined — add them in Settings → Data</option>
+                  </select>
+                ) : (
+                  <select
+                    className={inputCls}
+                    value={rootCauseId ?? ""}
+                    onChange={e => setRootCauseId(e.target.value ? Number(e.target.value) : null)}
+                    disabled={lookupsLoading}
+                  >
+                    <option value="">— Select root cause —</option>
+                    {rootCauseOptions.map(rc => (
+                      <option key={rc.id} value={rc.id}>{rc.name}</option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+
+              <Field label="Corrective Action">
+                <textarea
+                  className={`${inputCls} resize-none`}
+                  rows={3}
+                  placeholder="Describe the corrective action taken…"
+                  value={correctiveAction ?? ""}
+                  onChange={e => setCorrectiveAction(e.target.value || null)}
+                />
+              </Field>
+            </div>
+          )}
+
           {/* Save error */}
           {saveError && (
             <div className="flex gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
               <AlertTriangle size={15} className="text-red-500 mt-0.5 shrink-0" />
               <p className="text-sm text-red-700">{saveError}</p>
-            </div>
-          )}
-
-          {/* Success */}
-          {success && (
-            <div className="flex gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <CheckCircle2 size={15} className="text-emerald-600 mt-0.5 shrink-0" />
-              <p className="text-sm text-emerald-700">{success}</p>
             </div>
           )}
 
@@ -285,13 +358,13 @@ export function IncidentDetailsForm(props: Props) {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="px-6 py-2.5 text-sm font-semibold bg-brand text-brand-text rounded-xl hover:bg-brand-hover active:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
-                {loading ? "Saving…" : "Create Incident"}
+                {loading ? "Creating…" : "Create Event"}
               </button>
-              <p className="text-xs text-slate-400 hidden sm:block">POST /api/v1/incidents</p>
             </div>
           )}
+          </fieldset>
         </form>
       )}
     </div>

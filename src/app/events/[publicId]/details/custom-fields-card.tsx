@@ -11,11 +11,11 @@ const inputBase =
   "w-full px-3.5 py-2.5 text-sm text-slate-800 rounded-xl bg-slate-50 " +
   "focus:bg-white focus:outline-none focus:ring-2 transition-all placeholder:text-slate-400";
 
-const inputCls    = inputBase + " border border-slate-200 focus:ring-indigo-500/40 focus:border-indigo-400";
+const inputCls    = inputBase + " border border-slate-200 focus:ring-brand/40 focus:border-brand";
 const inputErrCls = inputBase + " border border-red-400 focus:ring-red-400/30 focus:border-red-400";
 
 function isEmpty(dataType: string, value: string): boolean {
-  if (dataType === "boolean") return false; // boolean is never "empty"
+  if (dataType === "boolean") return false;
   if (dataType === "multi_select") {
     try { return !value || (JSON.parse(value) as string[]).length === 0; }
     catch { return true; }
@@ -62,7 +62,7 @@ function MultiSelectInput({
         const active = selected.includes(opt);
         return (
           <button key={opt} type="button" onClick={() => toggle(opt)}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${active ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${active ? "bg-brand text-brand-text" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
             {opt}
           </button>
         );
@@ -103,7 +103,7 @@ function FieldInput({ field, value, onChange, hasError }: {
     case "boolean":
       return (
         <label className="flex items-center gap-2.5 cursor-pointer">
-          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
             checked={value === "true"} onChange={e => onChange(e.target.checked ? "true" : "false")} />
           <span className="text-sm text-slate-700 mt-px">{value === "true" ? "Yes" : "No"}</span>
         </label>
@@ -139,8 +139,8 @@ export interface CustomFieldsCardHandle {
 
 export const CustomFieldsCard = forwardRef<
   CustomFieldsCardHandle,
-  { incidentId: string; clientId: string; onDirtyChange?: (dirty: boolean) => void }
->(function CustomFieldsCard({ incidentId, clientId, onDirtyChange }, ref) {
+  { entityId: number; clientId: number; onDirtyChange?: (dirty: boolean) => void }
+>(function CustomFieldsCard({ entityId, clientId, onDirtyChange }, ref) {
   const [fields, setFields] = useState<CustomFieldValueDto[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [savedValues, setSavedValues] = useState<Record<string, string>>({});
@@ -148,21 +148,21 @@ export const CustomFieldsCard = forwardRef<
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    if (!incidentId || !clientId) return;
+    if (!entityId || !clientId) return;
     setLoading(true);
-    getCustomFieldValues(incidentId, clientId)
+    getCustomFieldValues(entityId, clientId)
       .then(data => {
         setFields(data);
         const init: Record<string, string> = {};
-        data.forEach(f => { init[f.customFieldId] = f.value; });
+        data.forEach(f => { init[String(f.customFieldId)] = f.value; });
         setValues(init);
         setSavedValues(init);
       })
       .finally(() => setLoading(false));
-  }, [incidentId, clientId]);
+  }, [entityId, clientId]);
 
   const isDirty = fields.some(
-    f => (values[f.customFieldId] ?? "") !== (savedValues[f.customFieldId] ?? "")
+    f => (values[String(f.customFieldId)] ?? "") !== (savedValues[String(f.customFieldId)] ?? "")
   );
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -172,9 +172,8 @@ export const CustomFieldsCard = forwardRef<
     async save() {
       if (fields.length === 0) return;
 
-      // Validate required fields
       const missing = fields.filter(
-        f => f.isRequired && isEmpty(f.dataType, values[f.customFieldId] ?? "")
+        f => f.isRequired && isEmpty(f.dataType, values[String(f.customFieldId)] ?? "")
       );
       if (missing.length > 0) {
         setSubmitted(true);
@@ -185,8 +184,8 @@ export const CustomFieldsCard = forwardRef<
 
       const entries = Object.entries(values)
         .filter(([, v]) => v !== "")
-        .map(([customFieldId, value]) => ({ customFieldId, value }));
-      await upsertCustomFieldValues(incidentId, clientId, entries);
+        .map(([customFieldId, value]) => ({ customFieldId: Number(customFieldId), value }));
+      await upsertCustomFieldValues(entityId, clientId, entries);
       setSavedValues({ ...values });
       setSubmitted(false);
     },
@@ -217,7 +216,8 @@ export const CustomFieldsCard = forwardRef<
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {fields.map(field => {
-            const val = values[field.customFieldId] ?? "";
+            const key = String(field.customFieldId);
+            const val = values[key] ?? "";
             const hasError = submitted && field.isRequired && isEmpty(field.dataType, val);
             return (
               <div key={field.customFieldId} className="flex flex-col gap-1.5">
@@ -228,7 +228,7 @@ export const CustomFieldsCard = forwardRef<
                 <FieldInput
                   field={field}
                   value={val}
-                  onChange={v => setValues(prev => ({ ...prev, [field.customFieldId]: v }))}
+                  onChange={v => setValues(prev => ({ ...prev, [key]: v }))}
                   hasError={hasError}
                 />
                 {hasError && (
