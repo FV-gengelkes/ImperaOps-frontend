@@ -1,4 +1,4 @@
-# FreightVis Frontend (Next.js MVP)
+# ImperaOps Frontend (Next.js MVP)
 
 ## Prereqs
 - Node 20+

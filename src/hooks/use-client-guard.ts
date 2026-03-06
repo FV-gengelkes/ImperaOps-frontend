@@ -15,11 +15,11 @@ import { useClientId } from "@/components/client-id-context";
  *   2. Switching clients while already viewing the resource.
  *
  * @param resourceClientId - The clientId that owns the resource. Pass null while loading.
- * @param fallback         - Where to redirect on mismatch. Defaults to "/incident/list".
+ * @param fallback         - Where to redirect on mismatch. Defaults to "/events/list".
  */
 export function useClientGuard(
-  resourceClientId: string | null | undefined,
-  fallback = "/incident/list",
+  resourceClientId: number | null | undefined,
+  fallback = "/events/list",
 ) {
   const { clientId } = useClientId();
   const router = useRouter();

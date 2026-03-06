@@ -1,24 +1,48 @@
 import type {
+  AdminAuditEventDto,
+  AdminClientDto,
+  AdminClientUserDto,
+  AdminUserDto,
+  AttachmentDto,
+  AuditEventDto,
   AuthResultDto,
-  BulkUpdateIncidentRequest,
+  BulkDeleteEventRequest,
+  BulkUpdateEventRequest,
+  ClientBrandingDto,
+  ClientInboundEmailDto,
   ClientUserDto,
-  CreateIncidentCommand,
-  CreateIncidentResponse,
+  ClientWebhookDto,
+  CreateEventRequest,
+  CreateEventResponse,
   CustomFieldDto,
   CustomFieldValueDto,
-  IncidentAnalyticsDto,
-  IncidentAttachmentDto,
-  IncidentDetailDto,
-  IncidentEventDto,
-  IncidentListItemDto,
-  IncidentLookupDto,
+  EventAnalyticsDto,
+  EventDetailDto,
+  EventListItemDto,
+  EventTemplateDto,
+  EventTypeDto,
+  LoginResult,
+  MyTaskDto,
+  WorkloadRowDto,
+  NotificationDto,
+  NotificationPreferenceDto,
   PagedResult,
-  UpdateIncidentRequest,
+  PublicReportConfigDto,
+  PublicReportRequest,
+  RootCauseTaxonomyItemDto,
+  SlaRuleDto,
+  TaskDto,
+  UpdateClientInboundEmailRequest,
+  UpdateEventRequest,
+  UpsertWebhookRequest,
+  UserClientAccessDto,
+  WorkflowStatusDto,
+  WorkflowTransitionDto,
 } from "./types";
 
-export type { BulkUpdateIncidentRequest };
+export type { BulkDeleteEventRequest, BulkUpdateEventRequest };
 
-const AUTH_TOKEN_KEY = "freightvis.token";
+const AUTH_TOKEN_KEY = "imperaops.token";
 
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -39,6 +63,13 @@ function baseUrl() {
   return v.replace(/\/$/, "");
 }
 
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredToken();
   const res = await fetch(`${baseUrl()}${path}`, {
@@ -52,8 +83,19 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      // Token expired or invalid — clear session and redirect to login
+      clearStoredToken();
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("imperaops.user");
+        window.localStorage.removeItem("imperaops.clients");
+        window.localStorage.removeItem("imperaops.isSuperAdmin");
+        window.localStorage.removeItem("imperaops.clientId");
+        window.location.href = "/login";
+      }
+    }
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+    throw new ApiError(res.status, `${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
   }
 
   if (res.status === 204) return undefined as T;
@@ -61,11 +103,46 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function login(email: string, password: string): Promise<AuthResultDto> {
-  return http<AuthResultDto>("/api/v1/auth/login", {
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export async function login(email: string, password: string): Promise<LoginResult> {
+  return http<LoginResult>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function setupTotp(): Promise<{ secret: string; qrCodeUri: string }> {
+  return http<{ secret: string; qrCodeUri: string }>("/api/v1/auth/totp/setup", { method: "POST" });
+}
+
+export async function verifyTotpSetup(code: string): Promise<void> {
+  return http<void>("/api/v1/auth/totp/verify-setup", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function disableTotp(password: string): Promise<void> {
+  return http<void>("/api/v1/auth/totp/disable", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function verifyTotpChallenge(pendingToken: string, code: string): Promise<AuthResultDto> {
+  return http<AuthResultDto>("/api/v1/auth/totp/challenge", {
+    method: "POST",
+    body: JSON.stringify({ pendingToken, code }),
+  });
+}
+
+export async function getTotpStatus(): Promise<{ isTotpEnabled: boolean }> {
+  return http<{ isTotpEnabled: boolean }>("/api/v1/auth/totp/status");
+}
+
+export async function adminDisableUserTotp(userId: number): Promise<void> {
+  return http<void>(`/api/v1/admin/users/${userId}/totp/disable`, { method: "POST" });
 }
 
 export async function updateProfile(displayName: string, email: string): Promise<{ displayName: string; email: string }> {
@@ -82,93 +159,163 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-// ── Admin ─────────────────────────────────────────────────────────────────────
-
-export async function adminGetClients() {
-  return http<import("./types").AdminClientDto[]>("/api/v1/admin/clients");
+export async function getSessions(): Promise<import("./types").SessionDto[]> {
+  return http<import("./types").SessionDto[]>("/api/v1/sessions");
 }
 
-export async function adminCreateClient(name: string, parentClientId?: string) {
-  return http<import("./types").AdminClientDto>("/api/v1/admin/clients", {
+export async function revokeSession(id: number): Promise<void> {
+  return http<void>(`/api/v1/sessions/${id}`, { method: "DELETE" });
+}
+
+export async function revokeOtherSessions(): Promise<void> {
+  return http<void>("/api/v1/sessions/others", { method: "DELETE" });
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  return http<void>("/api/v1/auth/forgot-password", {
     method: "POST",
-    body: JSON.stringify({ name, parentClientId: parentClientId ?? null }),
+    body: JSON.stringify({ email }),
   });
 }
 
-export async function adminUpdateClient(id: string, payload: {
-  name: string; parentClientId: string | null; isActive: boolean;
-}) {
+export async function validateToken(token: string): Promise<{ valid: boolean; type: string; email: string }> {
+  return http<{ valid: boolean; type: string; email: string }>(`/api/v1/auth/validate-token?token=${encodeURIComponent(token)}`);
+}
+
+export async function setPassword(token: string, newPassword: string): Promise<AuthResultDto> {
+  return http<AuthResultDto>("/api/v1/auth/set-password", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export async function adminGetClients(): Promise<AdminClientDto[]> {
+  return http<AdminClientDto[]>("/api/v1/admin/clients");
+}
+
+export async function adminCreateClient(
+  name: string,
+  parentClientId?: number,
+  templateId?: string,
+): Promise<AdminClientDto> {
+  return http<AdminClientDto>("/api/v1/admin/clients", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      parentClientId: parentClientId ?? null,
+      templateId: templateId ?? null,
+    }),
+  });
+}
+
+export async function adminGetTemplates(): Promise<EventTemplateDto[]> {
+  return http<EventTemplateDto[]>("/api/v1/event-templates");
+}
+
+export async function adminApplyTemplate(clientId: number, templateId: string): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/apply-template/${templateId}`, {
+    method: "POST",
+  });
+}
+
+export async function adminUpdateClient(id: number, payload: {
+  name: string; parentClientId: number | null; isActive: boolean;
+}): Promise<void> {
   return http<void>(`/api/v1/admin/clients/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function adminToggleClientActive(id: string) {
-  return http<{ id: string; isActive: boolean }>(`/api/v1/admin/clients/${id}/toggle-active`, {
+export async function adminToggleClientActive(id: number): Promise<{ id: number; isActive: boolean }> {
+  return http<{ id: number; isActive: boolean }>(`/api/v1/admin/clients/${id}/toggle-active`, {
     method: "PATCH",
   });
 }
 
-export async function adminGetUsers() {
-  return http<import("./types").AdminUserDto[]>("/api/v1/admin/users");
+export async function adminGetUsers(): Promise<AdminUserDto[]> {
+  return http<AdminUserDto[]>("/api/v1/admin/users");
 }
 
+export type InviteUserResult<T> = { user: T; inviteUrl: string; emailSent: boolean };
+
 export async function adminCreateUser(payload: {
-  email: string; displayName: string; password: string; isSuperAdmin: boolean;
-}) {
-  return http<import("./types").AdminUserDto>("/api/v1/admin/users", {
+  email: string; displayName: string; isSuperAdmin: boolean;
+  clientId?: number; role?: string; auditClientId?: number;
+}): Promise<InviteUserResult<AdminUserDto>> {
+  return http<InviteUserResult<AdminUserDto>>("/api/v1/admin/users", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function adminUpdateUser(id: string, payload: {
-  email: string; displayName: string; isActive: boolean; isSuperAdmin: boolean;
-}) {
+export async function adminUpdateUser(id: number, payload: {
+  email: string; displayName: string; isActive: boolean; isSuperAdmin: boolean; auditClientId?: number;
+}): Promise<void> {
   return http<void>(`/api/v1/admin/users/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function adminToggleUserActive(id: string) {
-  return http<{ id: string; isActive: boolean }>(`/api/v1/admin/users/${id}/toggle-active`, {
+export async function adminToggleUserActive(id: number, clientId?: number): Promise<{ id: number; isActive: boolean }> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<{ id: number; isActive: boolean }>(`/api/v1/admin/users/${id}/toggle-active${qs}`, {
     method: "PATCH",
   });
 }
 
-export async function adminChangePassword(id: string, newPassword: string) {
-  return http<void>(`/api/v1/admin/users/${id}/password`, {
+export async function adminChangePassword(id: number, newPassword: string, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/admin/users/${id}/password${qs}`, {
     method: "PUT",
     body: JSON.stringify({ newPassword }),
   });
 }
 
-export async function adminGetUserClients(userId: string) {
-  return http<import("./types").UserClientAccessDto[]>(`/api/v1/admin/users/${userId}/clients`);
+export async function adminGetUserClients(userId: number): Promise<UserClientAccessDto[]> {
+  return http<UserClientAccessDto[]>(`/api/v1/admin/users/${userId}/clients`);
 }
 
-export async function adminGrantClientAccess(userId: string, clientId: string, role: string) {
+export async function adminGrantClientAccess(userId: number, clientId: number, role: string): Promise<void> {
   return http<void>(`/api/v1/admin/users/${userId}/clients`, {
     method: "POST",
     body: JSON.stringify({ clientId, role }),
   });
 }
 
-export async function adminRevokeClientAccess(userId: string, clientId: string) {
+export async function adminRevokeClientAccess(userId: number, clientId: number): Promise<void> {
   return http<void>(`/api/v1/admin/users/${userId}/clients/${clientId}`, {
     method: "DELETE",
   });
 }
 
+export async function adminGetClientUsers(clientId: number): Promise<AdminClientUserDto[]> {
+  return http<AdminClientUserDto[]>(`/api/v1/admin/clients/${clientId}/users`);
+}
+
+export async function adminUpdateClientUserRole(clientId: number, userId: number, role: string): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function adminGetAuditLog(page = 1, pageSize = 50, clientId?: number): Promise<PagedResult<AdminAuditEventDto>> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (clientId) params.set("clientId", String(clientId));
+  return http<PagedResult<AdminAuditEventDto>>(`/api/v1/admin/audit?${params}`);
+}
+
 // ── Clients ───────────────────────────────────────────────────────────────────
 
-export async function getClientUsers(clientId: string): Promise<ClientUserDto[]> {
+export async function getClientUsers(clientId: number): Promise<ClientUserDto[]> {
   return http<ClientUserDto[]>(`/api/v1/clients/${clientId}/users`);
 }
 
-export async function addClientUser(clientId: string, email: string, role: string): Promise<ClientUserDto> {
+export async function addClientUser(clientId: number, email: string, role: string): Promise<ClientUserDto> {
   return http<ClientUserDto>(`/api/v1/clients/${clientId}/users`, {
     method: "POST",
     body: JSON.stringify({ email, role }),
@@ -176,73 +323,130 @@ export async function addClientUser(clientId: string, email: string, role: strin
 }
 
 export async function inviteClientUser(
-  clientId: string, email: string, displayName: string, password: string, role: string,
-): Promise<ClientUserDto> {
-  return http<ClientUserDto>(`/api/v1/clients/${clientId}/invite`, {
+  clientId: number, email: string, displayName: string, role: string,
+): Promise<InviteUserResult<ClientUserDto>> {
+  return http<InviteUserResult<ClientUserDto>>(`/api/v1/clients/${clientId}/invite`, {
     method: "POST",
-    body: JSON.stringify({ email, displayName, password, role }),
+    body: JSON.stringify({ email, displayName, role }),
   });
 }
 
-export async function getFamilyUsers(clientId: string): Promise<ClientUserDto[]> {
+export async function getFamilyUsers(clientId: number): Promise<ClientUserDto[]> {
   return http<ClientUserDto[]>(`/api/v1/clients/${clientId}/family-users`);
 }
 
-export async function updateClientUser(clientId: string, userId: string, displayName: string, email: string): Promise<void> {
+export async function updateClientUser(clientId: number, userId: number, displayName: string, email: string): Promise<void> {
   return http<void>(`/api/v1/clients/${clientId}/users/${userId}`, {
     method: "PUT",
     body: JSON.stringify({ displayName, email }),
   });
 }
 
-export async function updateClientUserRole(clientId: string, userId: string, role: string): Promise<void> {
+export async function updateClientUserRole(clientId: number, userId: number, role: string): Promise<void> {
   return http<void>(`/api/v1/clients/${clientId}/users/${userId}/role`, {
     method: "PATCH",
     body: JSON.stringify({ role }),
   });
 }
 
-export async function removeClientUser(clientId: string, userId: string): Promise<void> {
+export async function removeClientUser(clientId: number, userId: number): Promise<void> {
   return http<void>(`/api/v1/clients/${clientId}/users/${userId}`, {
     method: "DELETE",
   });
 }
 
-// ── Lookups ───────────────────────────────────────────────────────────────────
+// ── Event Types ───────────────────────────────────────────────────────────────
 
-export async function getLookups(clientId: string, fieldKey: string): Promise<IncidentLookupDto[]> {
-  const qs = new URLSearchParams({ clientId, fieldKey });
-  return http<IncidentLookupDto[]>(`/api/v1/lookups?${qs.toString()}`);
+export async function getEventTypes(clientId: number): Promise<EventTypeDto[]> {
+  return http<EventTypeDto[]>(`/api/v1/event-types?clientId=${clientId}`);
 }
 
-export async function createLookup(clientId: string, fieldKey: string, label: string): Promise<IncidentLookupDto> {
-  return http<IncidentLookupDto>("/api/v1/lookups", {
+export async function createEventType(clientId: number, name: string): Promise<EventTypeDto> {
+  return http<EventTypeDto>("/api/v1/event-types", {
     method: "POST",
-    body: JSON.stringify({ clientId, fieldKey, label }),
+    body: JSON.stringify({ clientId, name }),
   });
 }
 
-export async function updateLookup(id: string, clientId: string, label: string, sortOrder: number): Promise<void> {
-  return http<void>(`/api/v1/lookups/${id}`, {
+export async function updateEventType(id: number, payload: {
+  clientId: number; name: string; sortOrder: number; isActive: boolean;
+}): Promise<void> {
+  return http<void>(`/api/v1/event-types/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ clientId, label, sortOrder }),
+    body: JSON.stringify(payload),
   });
 }
 
-export async function deleteLookup(id: string, clientId: string): Promise<void> {
-  return http<void>(`/api/v1/lookups/${id}?clientId=${clientId}`, {
+export async function deleteEventType(id: number, clientId: number): Promise<void> {
+  return http<void>(`/api/v1/event-types/${id}?clientId=${clientId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Workflow Statuses ─────────────────────────────────────────────────────────
+
+export async function getWorkflowStatuses(clientId: number): Promise<WorkflowStatusDto[]> {
+  return http<WorkflowStatusDto[]>(`/api/v1/workflow-statuses?clientId=${clientId}`);
+}
+
+export async function createWorkflowStatus(payload: {
+  clientId: number; name: string; color: string | null; isClosed: boolean;
+}): Promise<WorkflowStatusDto> {
+  return http<WorkflowStatusDto>("/api/v1/workflow-statuses", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateWorkflowStatus(id: number, payload: {
+  clientId: number; name: string; color: string | null; isClosed: boolean; sortOrder: number; isActive: boolean;
+}): Promise<void> {
+  return http<void>(`/api/v1/workflow-statuses/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteWorkflowStatus(id: number, clientId: number): Promise<void> {
+  return http<void>(`/api/v1/workflow-statuses/${id}?clientId=${clientId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Workflow Transitions ──────────────────────────────────────────────────────
+
+export async function getWorkflowTransitions(clientId: number): Promise<WorkflowTransitionDto[]> {
+  return http<WorkflowTransitionDto[]>(`/api/v1/workflow-transitions?clientId=${clientId}`);
+}
+
+export async function createWorkflowTransition(payload: {
+  clientId: number;
+  fromStatusId: number | null;
+  toStatusId: number;
+  eventTypeId: number | null;
+  isDefault: boolean;
+  label: string | null;
+}): Promise<WorkflowTransitionDto> {
+  return http<WorkflowTransitionDto>("/api/v1/workflow-transitions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteWorkflowTransition(id: number): Promise<void> {
+  return http<void>(`/api/v1/workflow-transitions/${id}`, {
     method: "DELETE",
   });
 }
 
 // ── Custom Fields ─────────────────────────────────────────────────────────────
 
-export async function getCustomFields(clientId: string): Promise<CustomFieldDto[]> {
+export async function getCustomFields(clientId: number): Promise<CustomFieldDto[]> {
   return http<CustomFieldDto[]>(`/api/v1/custom-fields?clientId=${clientId}`);
 }
 
 export async function createCustomField(payload: {
-  clientId: string; name: string; dataType: string; isRequired: boolean; options: string | null;
+  clientId: number; name: string; dataType: string; isRequired: boolean; options: string | null;
 }): Promise<CustomFieldDto> {
   return http<CustomFieldDto>("/api/v1/custom-fields", {
     method: "POST",
@@ -250,8 +454,8 @@ export async function createCustomField(payload: {
   });
 }
 
-export async function updateCustomField(id: string, payload: {
-  clientId: string; name: string; dataType: string; isRequired: boolean; sortOrder: number; options: string | null;
+export async function updateCustomField(id: number, payload: {
+  clientId: number; name: string; dataType: string; isRequired: boolean; sortOrder: number; options: string | null;
 }): Promise<void> {
   return http<void>(`/api/v1/custom-fields/${id}`, {
     method: "PUT",
@@ -259,92 +463,107 @@ export async function updateCustomField(id: string, payload: {
   });
 }
 
-export async function deleteCustomField(id: string, clientId: string): Promise<void> {
+export async function deleteCustomField(id: number, clientId: number): Promise<void> {
   return http<void>(`/api/v1/custom-fields/${id}?clientId=${clientId}`, {
     method: "DELETE",
   });
 }
 
-export async function getCustomFieldValues(incidentId: string, clientId: string): Promise<CustomFieldValueDto[]> {
-  const qs = new URLSearchParams({ incidentId, clientId });
+export async function getCustomFieldValues(entityId: number, clientId: number): Promise<CustomFieldValueDto[]> {
+  const qs = new URLSearchParams({ entityId: String(entityId), clientId: String(clientId) });
   return http<CustomFieldValueDto[]>(`/api/v1/custom-fields/values?${qs.toString()}`);
 }
 
 export async function upsertCustomFieldValues(
-  incidentId: string,
-  clientId: string,
-  values: { customFieldId: string; value: string }[],
+  entityId: number,
+  clientId: number,
+  values: { customFieldId: number; value: string }[],
 ): Promise<void> {
   return http<void>("/api/v1/custom-fields/values", {
     method: "PUT",
-    body: JSON.stringify({ incidentId, clientId, values }),
+    body: JSON.stringify({ entityId, clientId, values }),
   });
 }
 
-export type IncidentFilters = {
-  type?: number;
-  status?: number;
+// ── Events ────────────────────────────────────────────────────────────────────
+
+export type EventFilters = {
+  eventTypeId?: number;
+  workflowStatusId?: number;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
 };
 
-export async function getIncidents(clientId: string, page = 1, pageSize = 25, filters?: IncidentFilters) {
-  const qs = new URLSearchParams({ clientId, page: String(page), pageSize: String(pageSize) });
-  if (filters?.type)     qs.set("type",     String(filters.type));
-  if (filters?.status)   qs.set("status",   String(filters.status));
-  if (filters?.dateFrom) qs.set("dateFrom", filters.dateFrom);
-  if (filters?.dateTo)   qs.set("dateTo",   filters.dateTo);
-  if (filters?.search)   qs.set("search",   filters.search);
-  return await http<PagedResult<IncidentListItemDto>>(`/api/v1/incidents?${qs.toString()}`);
+export async function getEvents(clientId: number, page = 1, pageSize = 25, filters?: EventFilters): Promise<PagedResult<EventListItemDto>> {
+  const qs = new URLSearchParams({ clientId: String(clientId), page: String(page), pageSize: String(pageSize) });
+  if (filters?.eventTypeId)      qs.set("eventTypeId",      String(filters.eventTypeId));
+  if (filters?.workflowStatusId) qs.set("workflowStatusId", String(filters.workflowStatusId));
+  if (filters?.dateFrom)         qs.set("dateFrom",         filters.dateFrom);
+  if (filters?.dateTo)           qs.set("dateTo",           filters.dateTo);
+  if (filters?.search)           qs.set("search",           filters.search);
+  return http<PagedResult<EventListItemDto>>(`/api/v1/events?${qs.toString()}`);
 }
 
-export async function getIncidentAnalytics(clientIds: string | string[]) {
+export async function getEventAnalytics(clientIds: number | number[], dateFrom?: string, dateTo?: string): Promise<EventAnalyticsDto> {
   const ids = Array.isArray(clientIds) ? clientIds : [clientIds];
   const qs = new URLSearchParams();
-  ids.forEach(id => qs.append("clientIds", id));
-  return await http<IncidentAnalyticsDto>(`/api/v1/incidents/analytics?${qs.toString()}`);
+  ids.forEach(id => qs.append("clientIds", String(id)));
+  if (dateFrom) qs.set("dateFrom", dateFrom);
+  if (dateTo)   qs.set("dateTo",   dateTo);
+  return http<EventAnalyticsDto>(`/api/v1/events/analytics?${qs.toString()}`);
 }
 
-export async function getIncidentDetail(id: string) {
-  return await http<IncidentDetailDto>(`/api/v1/incidents/${id}`);
+export async function getEventDetail(publicId: string): Promise<EventDetailDto> {
+  return http<EventDetailDto>(`/api/v1/events/${publicId}`);
 }
 
-export async function getIncidentByRef(refNumber: number, clientId: string) {
-  return await http<IncidentDetailDto>(`/api/v1/incidents/ref/${refNumber}?clientId=${clientId}`);
-}
-
-export async function createIncident(payload: CreateIncidentCommand) {
-  return await http<CreateIncidentResponse>(`/api/v1/incidents`, {
+export async function createEvent(payload: CreateEventRequest): Promise<CreateEventResponse> {
+  return http<CreateEventResponse>("/api/v1/events", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function updateIncident(id: string, payload: UpdateIncidentRequest) {
-  return await http<void>(`/api/v1/incidents/${id}`, {
+export async function updateEvent(publicId: string, payload: UpdateEventRequest): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function bulkUpdateIncidents(payload: BulkUpdateIncidentRequest): Promise<{ updated: number }> {
-  return http<{ updated: number }>("/api/v1/incidents/bulk", {
+export async function cloneEvent(publicId: string): Promise<{ publicId: string }> {
+  return http<{ publicId: string }>(`/api/v1/events/${publicId}/clone`, { method: "POST" });
+}
+
+export async function bulkUpdateEvents(payload: BulkUpdateEventRequest): Promise<{ updated: number }> {
+  return http<{ updated: number }>("/api/v1/events/bulk", {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
-export async function exportIncidentsCsv(clientId: string, filters?: IncidentFilters, filename?: string): Promise<void> {
-  const qs = new URLSearchParams({ clientId });
-  if (filters?.type)     qs.set("type",     String(filters.type));
-  if (filters?.status)   qs.set("status",   String(filters.status));
-  if (filters?.dateFrom) qs.set("dateFrom", filters.dateFrom);
-  if (filters?.dateTo)   qs.set("dateTo",   filters.dateTo);
-  if (filters?.search)   qs.set("search",   filters.search);
+export async function deleteEvent(publicId: string): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}`, { method: "DELETE" });
+}
+
+export async function bulkDeleteEvents(payload: BulkDeleteEventRequest): Promise<{ deleted: number }> {
+  return http<{ deleted: number }>("/api/v1/events/bulk", {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function exportEventsCsv(clientId: number, filters?: EventFilters, filename?: string): Promise<void> {
+  const qs = new URLSearchParams({ clientId: String(clientId) });
+  if (filters?.eventTypeId)      qs.set("eventTypeId",      String(filters.eventTypeId));
+  if (filters?.workflowStatusId) qs.set("workflowStatusId", String(filters.workflowStatusId));
+  if (filters?.dateFrom)         qs.set("dateFrom",         filters.dateFrom);
+  if (filters?.dateTo)           qs.set("dateTo",           filters.dateTo);
+  if (filters?.search)           qs.set("search",           filters.search);
 
   const token = getStoredToken();
-  const res = await fetch(`${baseUrl()}/api/v1/incidents/export?${qs.toString()}`, {
+  const res = await fetch(`${baseUrl()}/api/v1/events/export?${qs.toString()}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: "no-store",
   });
@@ -354,52 +573,52 @@ export async function exportIncidentsCsv(clientId: string, filters?: IncidentFil
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = filename ?? `incidents-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = filename ?? `events-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-// ── Incident Events ───────────────────────────────────────────────────────────
+// ── Audit Log ─────────────────────────────────────────────────────────────────
 
-export async function getIncidentEvents(incidentId: string): Promise<IncidentEventDto[]> {
-  return http<IncidentEventDto[]>(`/api/v1/incidents/${incidentId}/events`);
+export async function getAuditLog(publicId: string): Promise<AuditEventDto[]> {
+  return http<AuditEventDto[]>(`/api/v1/events/${publicId}/audit`);
 }
 
-export async function createIncidentComment(incidentId: string, body: string): Promise<IncidentEventDto> {
-  return http<IncidentEventDto>(`/api/v1/incidents/${incidentId}/events`, {
+export async function createComment(publicId: string, body: string): Promise<AuditEventDto> {
+  return http<AuditEventDto>(`/api/v1/events/${publicId}/audit/comments`, {
     method: "POST",
     body: JSON.stringify({ body }),
   });
 }
 
-export async function deleteIncidentEvent(incidentId: string, eventId: string): Promise<void> {
-  return http<void>(`/api/v1/incidents/${incidentId}/events/${eventId}`, {
+export async function deleteAuditEvent(publicId: string, auditId: number): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/audit/${auditId}`, {
     method: "DELETE",
   });
 }
 
-// ── Incident Attachments ──────────────────────────────────────────────────────
+// ── Attachments ───────────────────────────────────────────────────────────────
 
-export async function getIncidentAttachments(incidentId: string): Promise<IncidentAttachmentDto[]> {
-  return http<IncidentAttachmentDto[]>(`/api/v1/incidents/${incidentId}/attachments`);
+export async function getAttachments(publicId: string): Promise<AttachmentDto[]> {
+  return http<AttachmentDto[]>(`/api/v1/events/${publicId}/attachments`);
 }
 
-export async function getAttachmentUrl(incidentId: string, attachmentId: string): Promise<{ url: string }> {
-  return http<{ url: string }>(`/api/v1/incidents/${incidentId}/attachments/${attachmentId}/url`);
+export async function getAttachmentUrl(publicId: string, attachmentId: number): Promise<{ url: string }> {
+  return http<{ url: string }>(`/api/v1/events/${publicId}/attachments/${attachmentId}/url`);
 }
 
-export async function deleteIncidentAttachment(incidentId: string, attachmentId: string): Promise<void> {
-  return http<void>(`/api/v1/incidents/${incidentId}/attachments/${attachmentId}`, {
+export async function deleteAttachment(publicId: string, attachmentId: number): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/attachments/${attachmentId}`, {
     method: "DELETE",
   });
 }
 
-export async function uploadIncidentAttachment(incidentId: string, file: File): Promise<IncidentAttachmentDto> {
+export async function uploadAttachment(publicId: string, file: File): Promise<AttachmentDto> {
   const token    = getStoredToken();
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${baseUrl()}/api/v1/incidents/${incidentId}/attachments`, {
+  const res = await fetch(`${baseUrl()}/api/v1/events/${publicId}/attachments`, {
     method: "POST",
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -412,5 +631,266 @@ export async function uploadIncidentAttachment(incidentId: string, file: File): 
     const text = await res.text();
     throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
   }
-  return (await res.json()) as IncidentAttachmentDto;
+  return (await res.json()) as AttachmentDto;
+}
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+export async function getEventTasks(publicId: string): Promise<TaskDto[]> {
+  return http<TaskDto[]>(`/api/v1/events/${publicId}/tasks`);
+}
+
+export async function createEventTask(publicId: string, payload: {
+  title: string;
+  description?: string | null;
+  assignedToUserId?: number | null;
+  dueAt?: string | null;
+}): Promise<TaskDto> {
+  return http<TaskDto>(`/api/v1/events/${publicId}/tasks`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateEventTask(publicId: string, taskPublicId: string, payload: {
+  title: string;
+  description?: string | null;
+  assignedToUserId?: number | null;
+  dueAt?: string | null;
+}): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/tasks/${taskPublicId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function completeEventTask(publicId: string, taskPublicId: string): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/tasks/${taskPublicId}/complete`, {
+    method: "PATCH",
+  });
+}
+
+export async function uncompleteEventTask(publicId: string, taskPublicId: string): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/tasks/${taskPublicId}/uncomplete`, {
+    method: "PATCH",
+  });
+}
+
+export async function deleteEventTask(publicId: string, taskPublicId: string): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/tasks/${taskPublicId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderEventTasks(publicId: string, orderedPublicIds: string[]): Promise<void> {
+  return http<void>(`/api/v1/events/${publicId}/tasks/reorder`, {
+    method: "PATCH",
+    body: JSON.stringify({ orderedPublicIds }),
+  });
+}
+
+export async function getMyTasks(clientId: number, daysAhead: number): Promise<MyTaskDto[]> {
+  return http<MyTaskDto[]>(`/api/v1/tasks/my?clientId=${clientId}&daysAhead=${daysAhead}`);
+}
+
+export async function getWorkload(clientId: number): Promise<WorkloadRowDto[]> {
+  return http<WorkloadRowDto[]>(`/api/v1/events/workload?clientId=${clientId}`);
+}
+
+// ── Branding ──────────────────────────────────────────────────────────────────
+
+export async function getClientBranding(clientId: number): Promise<ClientBrandingDto> {
+  return http<ClientBrandingDto>(`/api/v1/clients/${clientId}/branding`);
+}
+
+export async function adminGetClientBranding(clientId: number): Promise<ClientBrandingDto> {
+  return http<ClientBrandingDto>(`/api/v1/admin/clients/${clientId}/branding`);
+}
+
+export async function adminUpdateClientBranding(clientId: number, payload: {
+  systemName?: string | null; primaryColor?: string | null; linkColor?: string | null;
+}): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/branding`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminUploadClientLogo(clientId: number, file: File): Promise<ClientBrandingDto> {
+  const token = getStoredToken();
+  const form  = new FormData();
+  form.append("logo", file);
+  const res = await fetch(`${baseUrl()}/api/v1/admin/clients/${clientId}/logo`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, `${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  return (await res.json()) as ClientBrandingDto;
+}
+
+export async function adminDeleteClientLogo(clientId: number): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/logo`, { method: "DELETE" });
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export async function getUnreadNotificationCount(): Promise<{ count: number; taskCount: number }> {
+  return http<{ count: number; taskCount: number }>("/api/v1/notifications/unread-count");
+}
+
+export async function getNotifications(page = 1, pageSize = 25): Promise<PagedResult<NotificationDto>> {
+  return http<PagedResult<NotificationDto>>(`/api/v1/notifications?page=${page}&pageSize=${pageSize}`);
+}
+
+export async function markNotificationRead(id: number): Promise<void> {
+  return http<void>(`/api/v1/notifications/${id}/read`, { method: "PATCH" });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  return http<void>("/api/v1/notifications/read-all", { method: "PATCH" });
+}
+
+export async function getNotificationPreferences(): Promise<NotificationPreferenceDto[]> {
+  return http<NotificationPreferenceDto[]>("/api/v1/notifications/preferences");
+}
+
+export async function saveNotificationPreferences(prefs: NotificationPreferenceDto[]): Promise<void> {
+  return http<void>("/api/v1/notifications/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ preferences: prefs }),
+  });
+}
+
+// ── Public Report (no auth) ───────────────────────────────────────────────────
+
+export async function getPublicReportConfig(slug: string): Promise<PublicReportConfigDto> {
+  const res = await fetch(`${baseUrl()}/api/v1/public/report/${encodeURIComponent(slug)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, `${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  return (await res.json()) as PublicReportConfigDto;
+}
+
+export async function submitPublicReport(
+  slug: string,
+  payload: PublicReportRequest,
+): Promise<{ publicId: string }> {
+  const res = await fetch(`${baseUrl()}/api/v1/public/report/${encodeURIComponent(slug)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, `${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  return (await res.json()) as { publicId: string };
+}
+
+// ── Inbound Email (admin) ─────────────────────────────────────────────────────
+
+export async function getClientInboundEmail(clientId: number): Promise<ClientInboundEmailDto> {
+  return http<ClientInboundEmailDto>(`/api/v1/admin/clients/${clientId}/inbound-email`);
+}
+
+export async function updateClientInboundEmail(
+  clientId: number,
+  payload: UpdateClientInboundEmailRequest,
+): Promise<void> {
+  await http<void>(`/api/v1/admin/clients/${clientId}/inbound-email`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ── Root Cause Taxonomy ───────────────────────────────────────────────────────
+
+export async function getRootCauseTaxonomy(clientId: number): Promise<RootCauseTaxonomyItemDto[]> {
+  return http<RootCauseTaxonomyItemDto[]>(`/api/v1/clients/${clientId}/taxonomy/root-cause`);
+}
+
+export async function createRootCauseTaxonomyItem(clientId: number, name: string): Promise<RootCauseTaxonomyItemDto> {
+  return http<RootCauseTaxonomyItemDto>(`/api/v1/clients/${clientId}/taxonomy/root-cause`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function updateRootCauseTaxonomyItem(clientId: number, id: number, name: string): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/taxonomy/root-cause/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteRootCauseTaxonomyItem(clientId: number, id: number): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/taxonomy/root-cause/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+
+export async function getWebhooks(clientId: number): Promise<ClientWebhookDto[]> {
+  return http<ClientWebhookDto[]>(`/api/v1/clients/${clientId}/webhooks`);
+}
+
+export async function createWebhook(clientId: number, req: UpsertWebhookRequest): Promise<ClientWebhookDto> {
+  return http<ClientWebhookDto>(`/api/v1/clients/${clientId}/webhooks`, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function updateWebhook(clientId: number, id: number, req: UpsertWebhookRequest): Promise<ClientWebhookDto> {
+  return http<ClientWebhookDto>(`/api/v1/clients/${clientId}/webhooks/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function deleteWebhook(clientId: number, id: number): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/webhooks/${id}`, { method: "DELETE" });
+}
+
+// ── SLA Rules (admin) ─────────────────────────────────────────────────────────
+
+export async function adminGetSlaRules(clientId: number): Promise<SlaRuleDto[]> {
+  return http<SlaRuleDto[]>(`/api/v1/admin/clients/${clientId}/sla-rules`);
+}
+
+export async function adminCreateSlaRule(
+  clientId: number,
+  payload: Omit<SlaRuleDto, "id" | "eventTypeName">,
+): Promise<SlaRuleDto> {
+  return http<SlaRuleDto>(`/api/v1/admin/clients/${clientId}/sla-rules`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminUpdateSlaRule(
+  clientId: number,
+  ruleId: number,
+  payload: Omit<SlaRuleDto, "id" | "eventTypeName">,
+): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/sla-rules/${ruleId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeleteSlaRule(clientId: number, ruleId: number): Promise<void> {
+  return http<void>(`/api/v1/admin/clients/${clientId}/sla-rules/${ruleId}`, {
+    method: "DELETE",
+  });
 }

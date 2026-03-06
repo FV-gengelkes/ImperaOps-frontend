@@ -5,59 +5,251 @@ export type PagedResult<T> = {
   pageSize: number;
 };
 
-export type IncidentListItemDto = {
-  id: string;
-  clientId: string;
-  type: number;
-  status: number;
+// ── Events ────────────────────────────────────────────────────────────────────
+
+export type EventListItemDto = {
+  id: number;
+  clientId: number;
+  publicId: string;
+  title: string;
+  eventTypeId: number;
+  eventTypeName: string;
+  workflowStatusId: number;
+  workflowStatusName: string;
+  workflowStatusColor: string | null;
+  workflowStatusIsClosed: boolean;
   occurredAt: string;
   location: string;
-  ownerUserId: string | null;
-  referenceNumber: number;
+  ownerUserId: number | null;
   ownerDisplayName: string | null;
+  referenceNumber: number;
+  createdAt: string;
 };
 
-export type IncidentDetailDto = {
-  id: string;
-  clientId: string;
-  type: number;
-  status: number;
+export type SlaStatusDto = {
+  ruleId: number;
+  ruleName: string;
+  investigationDeadline: string | null;
+  investigationBreached: boolean;
+  closureDeadline: string | null;
+  closureBreached: boolean;
+};
+
+export type EventDetailDto = {
+  id: number;
+  clientId: number;
+  publicId: string;
+  title: string;
+  eventTypeId: number;
+  eventTypeName: string;
+  workflowStatusId: number;
+  workflowStatusName: string;
+  workflowStatusColor: string | null;
+  workflowStatusIsClosed: boolean;
   occurredAt: string;
   location: string;
   description: string;
-  reportedByUserId: string;
-  ownerUserId: string | null;
+  reportedByUserId: number | null;
+  reportedByDisplayName: string | null;
+  externalReporterName: string | null;
+  externalReporterContact: string | null;
+  ownerUserId: number | null;
+  ownerDisplayName: string | null;
+  referenceNumber: number;
+  rootCauseId: number | null;
+  rootCauseName: string | null;
+  correctiveAction: string | null;
+  sla: SlaStatusDto | null;
   createdAt: string;
   updatedAt: string;
-  referenceNumber: number;
-  reportedByDisplayName: string | null;
 };
 
-export type CreateIncidentCommand = {
-  clientId: string;
-  type: number;
+export type CreateEventRequest = {
+  clientId: number;
+  title: string;
+  eventTypeId: number;
+  workflowStatusId: number;
   occurredAt: string;
   location: string;
   description: string;
-  reportedByUserId: string;
+  reportedByUserId: number;
+  ownerUserId?: number | null;
 };
 
-export type CreateIncidentResponse = { incidentId: string; referenceNumber: number };
+export type CreateEventResponse = { eventId: number; publicId: string };
 
-export type UpdateIncidentRequest = {
-  type: number;
-  status: number;
+export type UpdateEventRequest = {
+  title: string;
+  eventTypeId: number;
+  workflowStatusId: number;
   occurredAt: string;
   location: string;
   description: string;
-  ownerUserId: string | null;
+  ownerUserId: number | null;
+  rootCauseId: number | null;
+  correctiveAction: string | null;
 };
+
+export type BulkUpdateEventRequest = {
+  clientId: number;
+  eventPublicIds: string[];
+  workflowStatusId?: number;
+  ownerUserId?: number | null;
+  clearOwner?: boolean;
+};
+
+export type BulkDeleteEventRequest = {
+  clientId: number;
+  eventPublicIds: string[];
+};
+
+export type EventAnalyticsDto = {
+  total: number;
+  open: number;
+  closed: number;
+  thisMonth: number;
+  lastMonth: number;
+  byType: { eventTypeId: number; eventTypeName: string; count: number }[];
+  byMonth: { year: number; month: number; eventTypeId: number; eventTypeName: string; count: number }[];
+  topLocations: { location: string; count: number }[];
+  byRootCause: { name: string; count: number }[];
+  avgResolutionDays: number | null;
+  slaClosureComplianceRate: number | null;
+};
+
+export type RootCauseTaxonomyItemDto = {
+  id: number;
+  name: string;
+  sortOrder: number;
+};
+
+export type SlaRuleDto = {
+  id: number;
+  eventTypeId: number | null;
+  eventTypeName: string | null;
+  name: string;
+  investigationHours: number | null;
+  closureHours: number | null;
+};
+
+// ── Event Types ───────────────────────────────────────────────────────────────
+
+export type EventTypeDto = {
+  id: number;
+  clientId: number;
+  name: string;
+  sortOrder: number;
+  isSystem: boolean;
+  isActive: boolean;
+};
+
+// ── Workflow ──────────────────────────────────────────────────────────────────
+
+export type WorkflowStatusDto = {
+  id: number;
+  clientId: number;
+  name: string;
+  color: string | null;
+  isClosed: boolean;
+  sortOrder: number;
+  isSystem: boolean;
+  isActive: boolean;
+  count: number;
+};
+
+export type WorkflowTransitionDto = {
+  id: number;
+  clientId: number;
+  fromStatusId: number | null;
+  toStatusId: number;
+  eventTypeId: number | null;
+  isDefault: boolean;
+  label: string | null;
+  createdAt: string;
+};
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+export type TaskDto = {
+  id: number;
+  clientId: number;
+  eventId: number;
+  publicId: string;
+  title: string;
+  description: string | null;
+  assignedToUserId: number | null;
+  assignedToDisplayName: string | null;
+  dueAt: string | null;
+  isComplete: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MyTaskDto = {
+  taskPublicId: string;
+  title: string;
+  description: string | null;
+  dueAt: string;
+  eventPublicId: string;
+  eventTitle: string;
+};
+
+export type WorkloadRowDto = {
+  userId: number | null;
+  userName: string;
+  openEvents: number;
+  openTasks: number;
+};
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+
+export type AuditEventDto = {
+  id: number;
+  clientId: number;
+  entityType: string;
+  entityId: number;
+  eventType: string;
+  userId: number | null;
+  userDisplayName: string;
+  body: string;
+  createdAt: string;
+};
+
+export type AdminAuditEventDto = {
+  id: number;
+  clientId: number;
+  clientName: string | null;
+  entityType: string;
+  entityId: number;
+  eventType: string;
+  userId: number | null;
+  userDisplayName: string;
+  body: string;
+  createdAt: string;
+};
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+
+export type AttachmentDto = {
+  id: number;
+  entityType: string;
+  entityId: number;
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+  uploadedByUserId: number | null;
+  uploadedByDisplayName: string;
+  createdAt: string;
+};
+
+// ── Auth / Users ──────────────────────────────────────────────────────────────
 
 export type ClientAccessDto = {
-  id: string;
+  id: number;
   name: string;
   role: string;
-  parentClientId: string | null;
+  parentClientId: number | null;
 };
 
 export type AuthResultDto = {
@@ -68,49 +260,84 @@ export type AuthResultDto = {
   clients: ClientAccessDto[];
 };
 
+export type LoginResult =
+  | ({ totpRequired?: false } & AuthResultDto)
+  | { totpRequired: true; pendingToken: string };
+
+export type SessionDto = {
+  id: number;
+  description: string | null;
+  createdAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+};
+
 export type AdminClientDto = {
-  id: string;
+  id: number;
   name: string;
-  parentClientId: string | null;
+  slug: string;
+  parentClientId: number | null;
   parentClientName: string | null;
   isActive: boolean;
   userCount: number;
   createdAt: string;
+  appliedTemplateIds: string[];
 };
 
 export type AdminUserDto = {
-  id: string;
+  id: number;
   email: string;
   displayName: string;
   isActive: boolean;
   isSuperAdmin: boolean;
   clientCount: number;
   createdAt: string;
+  isTotpEnabled: boolean;
 };
 
 export type UserClientAccessDto = {
-  clientId: string;
+  clientId: number;
   clientName: string;
   clientIsActive: boolean;
   role: string;
   grantedAt: string;
 };
 
-export type IncidentLookupDto = {
-  id: string;
-  clientId: string;
-  fieldKey: string;
-  label: string;
-  value: number;
-  sortOrder: number;
-  isSystem: boolean;
+export type AdminClientUserDto = {
+  userId: number;
+  displayName: string;
+  email: string;
+  role: string;
   isActive: boolean;
-  count: number;
+  isSuperAdmin: boolean;
 };
 
-export type CustomFieldDto = {
+// ── Branding ──────────────────────────────────────────────────────────────────
+
+export type ClientBrandingDto = {
+  systemName:   string | null;
+  primaryColor: string | null;
+  linkColor:    string | null;
+  logoUrl:      string | null;
+};
+
+// ── Event Templates ───────────────────────────────────────────────────────────
+
+export type EventTemplateDto = {
   id: string;
-  clientId: string;
+  name: string;
+  description: string;
+  industry: string;
+  eventTypeCount: number;
+  statusCount: number;
+  customFieldCount: number;
+};
+
+// ── Custom Fields ─────────────────────────────────────────────────────────────
+
+export type CustomFieldDto = {
+  id: number;
+  clientId: number;
   name: string;
   dataType: string;
   isRequired: boolean;
@@ -120,9 +347,9 @@ export type CustomFieldDto = {
 };
 
 export type CustomFieldValueDto = {
-  id: string;
-  incidentId: string;
-  customFieldId: string;
+  id: number;
+  entityId: number;
+  customFieldId: number;
   fieldName: string;
   dataType: string;
   options: string | null;
@@ -130,8 +357,10 @@ export type CustomFieldValueDto = {
   value: string;
 };
 
+// ── Clients ───────────────────────────────────────────────────────────────────
+
 export type ClientUserDto = {
-  id: string;
+  id: number;
   displayName: string;
   email: string;
   role: string;
@@ -139,45 +368,83 @@ export type ClientUserDto = {
   isSuperAdmin: boolean;
 };
 
-export type IncidentEventDto = {
-  id: string;
-  incidentId: string;
-  eventType: string;
-  userId: string | null;
-  userDisplayName: string;
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export type NotificationDto = {
+  id: number;
+  notificationType: "event_assigned" | "task_assigned" | "comment_added" | "status_changed";
+  title: string;
   body: string;
+  entityPublicId: string | null;
+  isRead: boolean;
   createdAt: string;
 };
 
-export type IncidentAttachmentDto = {
-  id: string;
-  incidentId: string;
-  fileName: string;
-  contentType: string;
-  fileSizeBytes: number;
-  uploadedByUserId: string | null;
-  uploadedByDisplayName: string;
+export type NotificationPreferenceDto = {
+  notificationType: "event_assigned" | "task_assigned" | "comment_added" | "status_changed";
+  emailEnabled: boolean;
+  inAppEnabled: boolean;
+};
+
+// ── Public Report ──────────────────────────────────────────────────────────────
+
+export type PublicReportConfigDto = {
+  clientId: number;
+  clientName: string;
+  systemName: string | null;
+  primaryColor: string | null;
+  linkColor: string | null;
+  logoUrl: string | null;
+  defaultStatusId: number;
+  eventTypes: { id: number; name: string }[];
+};
+
+export type PublicReportRequest = {
+  clientId: number;
+  eventTypeId: number;
+  workflowStatusId: number;
+  title: string;
+  description: string;
+  location: string | null;
+  occurredAt: string | null;
+  reporterName: string | null;
+  reporterContact: string | null;
+};
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+
+export type ClientWebhookDto = {
+  id: number;
+  clientId: number;
+  name: string;
+  url: string;
+  secret: string | null;
+  eventTypes: string[];
+  isActive: boolean;
   createdAt: string;
 };
 
-export type BulkUpdateIncidentRequest = {
-  clientId: string;
-  incidentIds: string[];
-  status?: number;
-  ownerUserId?: string | null;
-  clearOwner?: boolean;
+export type UpsertWebhookRequest = {
+  name: string;
+  url: string;
+  secret?: string | null;
+  eventTypes: string[];
+  isActive: boolean;
 };
 
-export type IncidentAnalyticsDto = {
-  total: number;
-  open: number;
-  inProgress: number;
-  blocked: number;
-  closed: number;
-  thisMonth: number;
-  lastMonth: number;
-  byType: { type: number; count: number }[];
-  byMonth: { year: number; month: number; type: number; count: number }[];
-  topLocations: { location: string; count: number }[];
-  byLocationAndType: { location: string; type: number; count: number }[];
+// ── Inbound Email ──────────────────────────────────────────────────────────────
+
+export type ClientInboundEmailDto = {
+  inboundEmailSlug:             string | null;
+  inboundAddress:               string | null;
+  defaultInboundEventTypeId:    number | null;
+  defaultInboundWorkflowStatusId: number | null;
+  eventTypes:      { id: number; name: string }[];
+  workflowStatuses: { id: number; name: string }[];
+};
+
+export type UpdateClientInboundEmailRequest = {
+  inboundEmailSlug:             string | null;
+  defaultInboundEventTypeId:    number | null;
+  defaultInboundWorkflowStatusId: number | null;
 };

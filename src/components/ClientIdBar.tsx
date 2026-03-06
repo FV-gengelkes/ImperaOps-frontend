@@ -8,20 +8,22 @@ import { Building2, CheckCircle2 } from "lucide-react";
 export function ClientIdBar() {
   const { clientId, setClientId } = useClientId();
   const { isAuthenticated, clients } = useAuth();
-  const [value, setValue] = useState(clientId);
+  // Keep as string for the text input, parse to number on save
+  const [value, setValue] = useState(clientId > 0 ? String(clientId) : "");
 
   useEffect(() => {
-    setValue(clientId);
+    setValue(clientId > 0 ? String(clientId) : "");
   }, [clientId]);
 
   function save(next: string) {
     setValue(next);
-    setClientId(next);
+    const n = parseInt(next, 10);
+    if (!isNaN(n) && n > 0) setClientId(n);
   }
 
-  const isSet = clientId.trim().length > 0;
+  const isSet = clientId > 0;
 
-  // When logged in, show client name instead of raw UUID input
+  // When logged in, show client name instead of raw ID input
   if (isAuthenticated) {
     const activeClient = clients.find(c => c.id === clientId);
     return (
@@ -43,7 +45,7 @@ export function ClientIdBar() {
     );
   }
 
-  // Unauthenticated fallback — manual UUID entry
+  // Unauthenticated fallback — manual numeric ID entry
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-3.5 mb-6 flex items-center gap-4">
       <div className="flex items-center gap-2 shrink-0">
@@ -52,10 +54,11 @@ export function ClientIdBar() {
       </div>
 
       <input
-        className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-slate-700 min-w-0 transition-all"
+        type="number"
+        className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent font-mono text-slate-700 min-w-0 transition-all"
         value={value}
         onChange={(e) => save(e.target.value)}
-        placeholder="e.g. 11111111-1111-1111-1111-111111111111"
+        placeholder="e.g. 1"
       />
 
       {isSet ? (

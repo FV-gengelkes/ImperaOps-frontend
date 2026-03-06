@@ -17,8 +17,8 @@ import { useClientId } from "@/components/client-id-context";
  */
 
 const REDIRECT_RULES: Array<{ pattern: RegExp; to: string }> = [
-  // Incident detail — URL contains a resource ID owned by a specific client
-  { pattern: /^\/incident\/.+\/details$/, to: "/incident/list" },
+  // Event detail — URL contains a publicId owned by a specific client
+  { pattern: /^\/events\/.+\/details$/, to: "/events/list" },
 
   // Settings sub-pages — scoped to the active client; send back to hub
   // so the user consciously navigates into the new client's settings
@@ -29,7 +29,7 @@ export function useClientChangeRedirect() {
   const { clientId } = useClientId();
   const pathname = usePathname();
   const router = useRouter();
-  const prevClientId = useRef<string | null>(null);
+  const prevClientId = useRef<number | null>(null);
 
   useEffect(() => {
     // Skip on first mount — just record the baseline clientId
@@ -41,7 +41,7 @@ export function useClientChangeRedirect() {
     const prev = prevClientId.current;
     prevClientId.current = clientId;
 
-    // Only act when the client genuinely changes (not on empty→value transitions
+    // Only act when the client genuinely changes (not on 0→value transitions
     // that happen during auth hydration)
     if (!prev || !clientId || prev === clientId) return;
 

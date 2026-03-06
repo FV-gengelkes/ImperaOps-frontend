@@ -3,34 +3,34 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth-context";
 
-const STORAGE_KEY = "freightvis.clientId";
+const STORAGE_KEY = "imperaops.clientId";
 
 type ClientIdContextValue = {
-  clientId: string;
-  setClientId: (clientId: string) => void;
+  clientId: number;
+  setClientId: (clientId: number) => void;
 };
 
 const ClientIdContext = createContext<ClientIdContextValue | undefined>(undefined);
 
 export function ClientIdProvider(props: { children: React.ReactNode }) {
   const auth = useAuth();
-  const [manualClientId, setManualClientIdState] = useState<string>("");
+  const [manualClientId, setManualClientIdState] = useState<number>(0);
 
   // Load manual value from storage on mount (for unauthenticated / override use)
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY) || "";
+    const saved = parseInt(window.localStorage.getItem(STORAGE_KEY) || "") || 0;
     setManualClientIdState(saved);
   }, []);
 
   // When auth provides an activeClientId, it takes priority
   const clientId = auth.activeClientId || manualClientId;
 
-  const setClientId = (next: string) => {
+  const setClientId = (next: number) => {
     if (auth.isAuthenticated) {
       auth.setActiveClientId(next);
     } else {
       setManualClientIdState(next);
-      window.localStorage.setItem(STORAGE_KEY, next);
+      window.localStorage.setItem(STORAGE_KEY, String(next));
     }
   };
 
