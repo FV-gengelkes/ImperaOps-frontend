@@ -1,15 +1,13 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
 
 export type Module = {
   key: string;
   label: string;
 };
 
-// Only Incidents for now; expand as new modules are added.
 export const ALL_MODULES: Module[] = [
-  { key: "incidents", label: "Incidents" },
+  { key: "incidents", label: "Events" },
 ];
 
 export function ModuleTabs({
@@ -30,7 +28,7 @@ export function ModuleTabs({
           onClick={() => onChange(m.key)}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             m.key === activeModule
-              ? "bg-indigo-600 text-white"
+              ? "bg-brand text-brand-text"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
           }`}
         >

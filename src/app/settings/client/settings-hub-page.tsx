@@ -6,7 +6,7 @@ import { settingsSections } from "./settings-nav";
 
 export default function SettingsHubPage() {
   return (
-    <div className="pt-10 pl-8 pr-8 pb-8 max-w-4xl">
+    <div className="pt-8 sm:pt-10 px-4 sm:px-8 pb-8 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">

@@ -1,18 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Shield, ShieldCheck, UserPlus, ArrowLeft, Pencil, X, KeyRound } from "lucide-react";
+import { Users, Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Shield, UserPlus, ArrowLeft, Pencil, X, KeyRound } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
 import { addClientUser, adminChangePassword, adminUpdateUser, getFamilyUsers, getClientUsers, inviteClientUser, removeClientUser, updateClientUser, updateClientUserRole } from "@/lib/api";
 import type { ClientUserDto } from "@/lib/types";
 import { useAuth } from "@/components/auth-context";
+import { useToast } from "@/components/toast-context";
 
 const inputCls =
   "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 " +
   "placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 " +
   "focus:border-transparent transition";
 
-const ROLES = ["Member", "Admin"] as const;
+const ROLES = ["Viewer", "Investigator", "Manager", "Admin"] as const;
 
 const darkInputCls =
   "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white " +
@@ -50,12 +51,12 @@ function ActiveBadge({ active }: { active: boolean }) {
 
 type AddPhase = "search" | "invite";
 
-function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: ClientUserDto) => void }) {
+function AddUserCard({ clientId, onAdded }: { clientId: number; onAdded: (user: ClientUserDto) => void }) {
+  const toast = useToast();
   const [phase, setPhase]         = useState<AddPhase>("search");
   const [email, setEmail]         = useState("");
   const [role, setRole]           = useState("Member");
   const [displayName, setDisplayName] = useState("");
-  const [password, setPassword]   = useState("");
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState("");
 
@@ -64,7 +65,6 @@ function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: 
     setEmail("");
     setRole("Member");
     setDisplayName("");
-    setPassword("");
     setError("");
   }
 
@@ -92,13 +92,17 @@ function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: 
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    if (!displayName.trim() || !password) return;
+    if (!displayName.trim()) return;
     setBusy(true);
     setError("");
     try {
-      const user = await inviteClientUser(clientId, email.trim(), displayName.trim(), password, role);
-      onAdded(user);
+      const result = await inviteClientUser(clientId, email.trim(), displayName.trim(), role);
+      onAdded(result.user);
       reset();
+      if (!result.emailSent) {
+        try { await navigator.clipboard.writeText(result.inviteUrl); } catch {}
+        toast.warning("Email delivery failed — invite link copied to clipboard.");
+      }
     } catch (err: unknown) {
       const msg = (err as Error).message ?? "";
       // Account was created between our 404 check and now — add the existing user instead
@@ -184,35 +188,23 @@ function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: 
               <input className={inputCls + " w-full bg-slate-50 text-slate-500"} value={email} readOnly />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
-                  Display Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  className={inputCls + " w-full"}
-                  placeholder="Jane Smith"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
-                  Temporary Password <span className="text-red-400">*</span>
-                </label>
-                <input
-                  className={inputCls + " w-full"}
-                  type="password"
-                  placeholder="Min 8 characters"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                Display Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                className={inputCls + " w-full"}
+                placeholder="Jane Smith"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                required
+                autoFocus
+              />
             </div>
+
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+              An invitation email will be sent with a link to set their password.
+            </p>
 
             {/* Role locked — show as read-only badge */}
             <p className="text-xs text-slate-500">
@@ -229,7 +221,7 @@ function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: 
               </button>
               <button
                 type="submit"
-                disabled={busy || !displayName.trim() || password.length < 8}
+                disabled={busy || !displayName.trim()}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {busy ? <RefreshCw size={14} className="animate-spin" /> : <UserPlus size={14} />}
@@ -245,7 +237,7 @@ function AddUserCard({ clientId, onAdded }: { clientId: string; onAdded: (user: 
 
 // ── Family users card (super admin only) ──────────────────────────────────────
 
-function FamilyUsersCard({ clientId, onAdded }: { clientId: string; onAdded: (user: ClientUserDto) => void }) {
+function FamilyUsersCard({ clientId, onAdded }: { clientId: number; onAdded: (user: ClientUserDto) => void }) {
   const [users,   setUsers]   = useState<ClientUserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState("");
@@ -360,9 +352,9 @@ function EditUserModal({
   onClose,
 }: {
   user: ClientUserDto;
-  clientId: string;
+  clientId: number;
   viewerIsSuperAdmin: boolean;
-  onSaved: (updated: Partial<ClientUserDto> & { id: string }) => void;
+  onSaved: (updated: Partial<ClientUserDto> & { id: number }) => void;
   onClose: () => void;
 }) {
   const [displayName,    setDisplayName]    = useState(user.displayName);
@@ -370,7 +362,6 @@ function EditUserModal({
   const [changePassword, setChangePassword] = useState(false);
   const [newPassword,    setNewPassword]    = useState("");
   const [isActive,       setIsActive]       = useState(user.isActive);
-  const [isSuperAdmin,   setIsSuperAdmin]   = useState(user.isSuperAdmin);
   const [busy,           setBusy]           = useState(false);
   const [error,          setError]          = useState("");
 
@@ -382,19 +373,19 @@ function EditUserModal({
     setError("");
     try {
       if (viewerIsSuperAdmin) {
-        await adminUpdateUser(String(user.id), {
+        await adminUpdateUser(user.id, {
           email: email.trim(),
           displayName: displayName.trim(),
           isActive,
-          isSuperAdmin,
+          isSuperAdmin: user.isSuperAdmin, // preserve — super admin status is never changed from client settings
         });
         if (changePassword && newPassword) {
-          await adminChangePassword(String(user.id), newPassword);
+          await adminChangePassword(user.id, newPassword);
         }
-        onSaved({ id: String(user.id), displayName: displayName.trim(), email: email.trim().toLowerCase(), isActive, isSuperAdmin });
+        onSaved({ id: user.id, displayName: displayName.trim(), email: email.trim().toLowerCase(), isActive, isSuperAdmin: user.isSuperAdmin });
       } else {
-        await updateClientUser(clientId, String(user.id), displayName.trim(), email.trim());
-        onSaved({ id: String(user.id), displayName: displayName.trim(), email: email.trim().toLowerCase() });
+        await updateClientUser(clientId, user.id, displayName.trim(), email.trim());
+        onSaved({ id: user.id, displayName: displayName.trim(), email: email.trim().toLowerCase() });
       }
     } catch (err: unknown) {
       setError((err as Error).message ?? "Failed to update user.");
@@ -456,24 +447,14 @@ function EditUserModal({
               )}
             </div>
 
-            {/* Active + Super Admin */}
-            <div className="rounded-lg bg-slate-800 divide-y divide-slate-700/60">
+            {/* Active */}
+            <div className="rounded-lg bg-slate-800">
               <div className="flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-white">Active</p>
                   <p className="text-xs text-slate-400">Inactive users cannot log in.</p>
                 </div>
                 <Toggle checked={isActive} onChange={setIsActive} />
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-start gap-2">
-                  <ShieldCheck size={14} className="text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-white">Super Admin</p>
-                    <p className="text-xs text-slate-400">Full access to all clients and admin settings.</p>
-                  </div>
-                </div>
-                <Toggle checked={isSuperAdmin} onChange={setIsSuperAdmin} />
               </div>
             </div>
 
@@ -554,8 +535,8 @@ export default function ClientUsersPage() {
   const [users, setUsers]       = useState<ClientUserDto[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
-  const [removing, setRemoving]         = useState<string | null>(null);
-  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [removing, setRemoving]         = useState<number | null>(null);
+  const [updatingRole, setUpdatingRole] = useState<number | null>(null);
   const [editingUser, setEditingUser]   = useState<ClientUserDto | null>(null);
 
   const load = useCallback(async () => {
@@ -573,13 +554,16 @@ export default function ClientUsersPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Super admins are managed in the admin panel — hide them from the client settings view
+  const visibleUsers = users.filter(u => !u.isSuperAdmin);
+
   function handleAdded(user: ClientUserDto) {
     setUsers(prev =>
       [...prev, user].sort((a, b) => a.displayName.localeCompare(b.displayName))
     );
   }
 
-  async function handleRoleChange(userId: string, role: string) {
+  async function handleRoleChange(userId: number, role: string) {
     if (!clientId) return;
     setUpdatingRole(userId);
     try {
@@ -592,7 +576,7 @@ export default function ClientUsersPage() {
     }
   }
 
-  function handleUserSaved(updated: Partial<ClientUserDto> & { id: string }) {
+  function handleUserSaved(updated: Partial<ClientUserDto> & { id: number }) {
     setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, ...updated } : u));
     setEditingUser(null);
   }
@@ -650,7 +634,7 @@ export default function ClientUsersPage() {
               <h2 className="font-semibold text-slate-800">
                 Users with Access
                 {!loading && (
-                  <span className="ml-2 text-sm font-normal text-slate-400">({users.length})</span>
+                  <span className="ml-2 text-sm font-normal text-slate-400">({visibleUsers.length})</span>
                 )}
               </h2>
               <button
@@ -668,13 +652,13 @@ export default function ClientUsersPage() {
 
             {loading ? (
               <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>
-            ) : users.length === 0 ? (
+            ) : visibleUsers.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-slate-400">
                 No users have access to this client yet.
               </div>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {users.map(user => (
+                {visibleUsers.map(user => (
                   <li key={user.id} className="flex items-center gap-4 px-5 py-3.5">
                     {/* Avatar */}
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white font-bold text-sm shrink-0">

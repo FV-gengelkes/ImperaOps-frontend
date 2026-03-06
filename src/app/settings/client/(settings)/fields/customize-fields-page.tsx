@@ -7,6 +7,7 @@ import {
   List, ListChecks, Link, Phone, Mail, AlignLeft, Star,
 } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
+import { useToast } from "@/components/toast-context";
 import { getCustomFields, createCustomField, updateCustomField, deleteCustomField } from "@/lib/api";
 import type { CustomFieldDto } from "@/lib/types";
 import { ModuleTabs } from "../module-tabs";
@@ -237,13 +238,14 @@ function FieldFormRow({
 
 export default function CustomFieldsPage() {
   const { clientId } = useClientId();
+  const toast = useToast();
   const [activeModule, setActiveModule] = useState("incidents");
   const [fields, setFields] = useState<CustomFieldDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
@@ -276,6 +278,7 @@ export default function CustomFieldsPage() {
       });
       setAdding(false);
       await load();
+      toast.success("Field created");
     } catch (e: unknown) {
       setError((e as Error).message ?? "Failed to create.");
     } finally {
@@ -296,6 +299,7 @@ export default function CustomFieldsPage() {
       });
       setEditId(null);
       await load();
+      toast.success("Field updated");
     } catch (e: unknown) {
       setError((e as Error).message ?? "Failed to update.");
     } finally {
@@ -308,13 +312,14 @@ export default function CustomFieldsPage() {
     try {
       await deleteCustomField(field.id, clientId);
       await load();
+      toast.success("Field deleted");
     } catch (e: unknown) {
       setError((e as Error).message ?? "Failed to delete.");
     }
   }
 
   return (
-    <div className="pt-10 pl-8 pr-8 pb-8 max-w-3xl">
+    <div className="pt-8 sm:pt-10 px-4 sm:px-8 pb-8 max-w-3xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">

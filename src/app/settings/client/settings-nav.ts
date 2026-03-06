@@ -1,4 +1,4 @@
-import { Database, Sliders, Users } from "lucide-react";
+import { Database, Sliders, Users, Webhook } from "lucide-react";
 
 export const settingsSections = [
   {
@@ -28,6 +28,18 @@ export const settingsSections = [
         label: "User Administration",
         description: "Add and remove users, and manage their roles for this client.",
         icon: Users,
+      },
+    ],
+  },
+  {
+    section: "Integrations",
+    description: "Connect ImperaOps to external systems.",
+    items: [
+      {
+        href: "/settings/client/webhooks",
+        label: "Webhooks",
+        description: "Send event lifecycle notifications to external URLs.",
+        icon: Webhook,
       },
     ],
   },
