@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useClientId } from "@/components/client-id-context";
 import { useAuth } from "@/components/auth-context";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/toast-context";
+import { isAdmin as checkAdmin, isManagerOrAbove as checkManager } from "@/lib/role-helpers";
 import {
   getEvents, getEventTypes, getWorkflowStatuses, exportEventsCsv,
   getClientUsers, bulkUpdateEvents, bulkDeleteEvents,
@@ -11,7 +13,8 @@ import {
 import type { EventFilters, BulkUpdateEventRequest, BulkDeleteEventRequest } from "@/lib/api";
 import type { EventListItemDto, EventTypeDto, WorkflowStatusDto, PagedResult, ClientUserDto } from "@/lib/types";
 import { EventListTable } from "./event-list-table";
-import { AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, X, Search, Download, Loader2, Check, Bookmark, BookmarkCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, X, Search, Download, Loader2, Check, Bookmark, BookmarkCheck, Trash2, Clock } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 // ── Filter Presets ────────────────────────────────────────────────────────────
 
@@ -62,9 +65,10 @@ const dateCls =
 export default function EventListPage() {
   const { clientId } = useClientId();
   const { clients, isSuperAdmin } = useAuth();
+  const searchParams = useSearchParams();
   const role             = clients.find(c => c.id === clientId)?.role;
-  const isAdmin          = isSuperAdmin || role === "Admin";
-  const isManagerOrAbove = isSuperAdmin || ["Admin", "Manager"].includes(role ?? "");
+  const isAdmin          = checkAdmin(isSuperAdmin, role);
+  const isManagerOrAbove = checkManager(isSuperAdmin, role);
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
@@ -75,6 +79,21 @@ export default function EventListPage() {
   const [filterStatus,   setFilterStatus]   = useState<string>("");
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo,   setFilterDateTo]   = useState<string>("");
+  const [filterSlaBreached, setFilterSlaBreached] = useState<boolean>(false);
+  const [filterIsClosed, setFilterIsClosed] = useState<string>(""); // "" | "true" | "false"
+
+  // Read URL params on mount
+  const urlParamsRead = useRef(false);
+  useEffect(() => {
+    if (urlParamsRead.current) return;
+    urlParamsRead.current = true;
+    if (searchParams.get("search")) setFilterSearch(searchParams.get("search")!);
+    if (searchParams.get("slaBreached") === "true") setFilterSlaBreached(true);
+    if (searchParams.get("isClosed") === "true") setFilterIsClosed("true");
+    if (searchParams.get("isClosed") === "false") setFilterIsClosed("false");
+    if (searchParams.get("dateFrom")) setFilterDateFrom(searchParams.get("dateFrom")!);
+    if (searchParams.get("dateTo")) setFilterDateTo(searchParams.get("dateTo")!);
+  }, [searchParams]);
 
   // Presets
   const [presets, setPresets] = useState<FilterPreset[]>([]);
@@ -99,13 +118,14 @@ export default function EventListPage() {
   const [bulkOwner,    setBulkOwner]    = useState<string>("");  // userId as string, "" or "CLEAR"
   const [bulkLoading,  setBulkLoading]  = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const canQuery   = clientId > 0;
   const totalPages = data ? Math.ceil(data.totalCount / pageSize) : 0;
   const rangeStart = data && data.totalCount > 0 ? (page - 1) * pageSize + 1 : 0;
   const rangeEnd   = data ? Math.min(page * pageSize, data.totalCount) : 0;
 
-  const hasFilters = !!(debouncedSearch || filterType || filterStatus || filterDateFrom || filterDateTo);
+  const hasFilters = !!(debouncedSearch || filterType || filterStatus || filterDateFrom || filterDateTo || filterSlaBreached || filterIsClosed);
 
   function buildFilters(): EventFilters {
     return {
@@ -114,6 +134,8 @@ export default function EventListPage() {
       workflowStatusId: filterStatus ? Number(filterStatus) : undefined,
       dateFrom:         filterDateFrom || undefined,
       dateTo:           filterDateTo   || undefined,
+      slaBreached:      filterSlaBreached || undefined,
+      isClosed:         filterIsClosed === "true" ? true : filterIsClosed === "false" ? false : undefined,
     };
   }
 
@@ -123,6 +145,8 @@ export default function EventListPage() {
     setFilterStatus("");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setFilterSlaBreached(false);
+    setFilterIsClosed("");
   }
 
   function applyPreset(preset: FilterPreset) {
@@ -259,7 +283,6 @@ export default function EventListPage() {
 
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Permanently delete ${selectedIds.size} event${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
 
     const payload: BulkDeleteEventRequest = {
       clientId,
@@ -281,9 +304,14 @@ export default function EventListPage() {
     }
   }
 
-  // Load presets whenever clientId changes
+  // Reset filters + presets whenever clientId changes
+  const prevClientId = useRef(clientId);
   useEffect(() => {
     if (!clientId) return;
+    if (prevClientId.current && prevClientId.current !== clientId) {
+      clearFilters();
+    }
+    prevClientId.current = clientId;
     setPresets(loadPresets(clientId));
     setSavingPreset(false);
     setPresetName("");
@@ -307,10 +335,10 @@ export default function EventListPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [clientId, debouncedSearch, filterType, filterStatus, filterDateFrom, filterDateTo]);
+  }, [clientId, debouncedSearch, filterType, filterStatus, filterDateFrom, filterDateTo, filterSlaBreached, filterIsClosed]);
 
   // Reload whenever page changes
-  useEffect(() => { void load(page); /* eslint-disable-next-line */ }, [clientId, page, debouncedSearch, filterType, filterStatus, filterDateFrom, filterDateTo]);
+  useEffect(() => { void load(page); /* eslint-disable-next-line */ }, [clientId, page, debouncedSearch, filterType, filterStatus, filterDateFrom, filterDateTo, filterSlaBreached, filterIsClosed]);
 
   const currentPageIds = data?.items?.map(i => i.publicId) ?? [];
   const allSelected = currentPageIds.length > 0 && currentPageIds.every(id => selectedIds.has(id));
@@ -410,6 +438,28 @@ export default function EventListPage() {
               className={dateCls}
             />
           </div>
+
+          <button
+            onClick={() => setFilterSlaBreached(v => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              filterSlaBreached
+                ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <Clock size={13} />
+            Past SLA
+          </button>
+
+          <select
+            value={filterIsClosed}
+            onChange={(e) => setFilterIsClosed(e.target.value)}
+            className={`${selectCls} ${filterIsClosed ? "ring-2 ring-brand/30 border-brand" : ""}`}
+          >
+            <option value="">Open / Closed</option>
+            <option value="false">Open Only</option>
+            <option value="true">Closed Only</option>
+          </select>
 
           {hasFilters && (
             <button
@@ -536,7 +586,7 @@ export default function EventListPage() {
 
             {isAdmin && (
               <button
-                onClick={handleBulkDelete}
+                onClick={() => setShowBulkDeleteConfirm(true)}
                 disabled={bulkDeleteLoading || bulkLoading}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -615,6 +665,16 @@ export default function EventListPage() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Events"
+        description={`Permanently delete ${selectedIds.size} event${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

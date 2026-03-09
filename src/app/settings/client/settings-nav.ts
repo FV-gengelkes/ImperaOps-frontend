@@ -1,4 +1,4 @@
-import { Database, Sliders, Users, Webhook } from "lucide-react";
+import { Clock, Database, FileText, Sliders, Users, Webhook } from "lucide-react";
 
 export const settingsSections = [
   {
@@ -16,6 +16,18 @@ export const settingsSections = [
         label: "Custom Fields",
         description: "Add your own fields to incident records with flexible data types.",
         icon: Sliders,
+      },
+      {
+        href: "/settings/client/documents",
+        label: "Document Library",
+        description: "Upload and manage organizational policies, procedures, and checklists.",
+        icon: FileText,
+      },
+      {
+        href: "/settings/client/sla",
+        label: "SLA Rules",
+        description: "Set investigation and closure deadlines for events by type.",
+        icon: Clock,
       },
     ],
   },

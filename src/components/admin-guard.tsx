@@ -6,13 +6,14 @@ import { useAuth } from "./auth-context";
 import { ShieldOff } from "lucide-react";
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isSuperAdmin } = useAuth();
+  const { isAuthenticated, isSuperAdmin, ready } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace("/login");
-  }, [isAuthenticated, router]);
+    if (ready && !isAuthenticated) router.replace("/login");
+  }, [ready, isAuthenticated, router]);
 
+  if (!ready) return null;
   if (!isAuthenticated) return null;
 
   if (!isSuperAdmin) {

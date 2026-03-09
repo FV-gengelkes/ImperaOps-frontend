@@ -23,6 +23,7 @@ export type EventListItemDto = {
   ownerUserId: number | null;
   ownerDisplayName: string | null;
   referenceNumber: number;
+  linkGroupCount: number;
   createdAt: string;
 };
 
@@ -60,6 +61,8 @@ export type EventDetailDto = {
   rootCauseName: string | null;
   correctiveAction: string | null;
   sla: SlaStatusDto | null;
+  hasInvestigation: boolean;
+  investigationStatus: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -115,6 +118,7 @@ export type EventAnalyticsDto = {
   byRootCause: { name: string; count: number }[];
   avgResolutionDays: number | null;
   slaClosureComplianceRate: number | null;
+  slaBreachedCount: number;
 };
 
 export type RootCauseTaxonomyItemDto = {
@@ -257,6 +261,8 @@ export type AuthResultDto = {
   displayName: string;
   email: string;
   isSuperAdmin: boolean;
+  activeClientId: number | null;
+  activeClientName: string | null;
   clients: ClientAccessDto[];
 };
 
@@ -272,13 +278,15 @@ export type SessionDto = {
   isCurrent: boolean;
 };
 
+export type ClientStatus = "Active" | "Inactive" | "Demo" | "SalesDemo";
+
 export type AdminClientDto = {
   id: number;
   name: string;
   slug: string;
   parentClientId: number | null;
   parentClientName: string | null;
-  isActive: boolean;
+  status: ClientStatus;
   userCount: number;
   createdAt: string;
   appliedTemplateIds: string[];
@@ -298,7 +306,7 @@ export type AdminUserDto = {
 export type UserClientAccessDto = {
   clientId: number;
   clientName: string;
-  clientIsActive: boolean;
+  clientStatus: string;
   role: string;
   grantedAt: string;
 };
@@ -411,6 +419,101 @@ export type PublicReportRequest = {
   reporterContact: string | null;
 };
 
+// ── Event Links ──────────────────────────────────────────────────────
+
+export type EventLinkGroupDto = {
+  id: number;
+  clientId: number;
+  title: string;
+  description: string | null;
+  eventCount: number;
+  createdAt: string;
+};
+
+export type EventLinkGroupDetailDto = {
+  id: number;
+  clientId: number;
+  title: string;
+  description: string | null;
+  events: LinkedEventSummaryDto[];
+  createdAt: string;
+};
+
+export type LinkedEventSummaryDto = {
+  eventId: number;
+  publicId: string;
+  title: string;
+  eventTypeName: string;
+  workflowStatusName: string;
+  workflowStatusColor: string | null;
+};
+
+// ── Insights ─────────────────────────────────────────────────────────
+
+export type InsightAlertDto = {
+  id: number;
+  clientId: number;
+  alertType: string;
+  severity: string;
+  title: string;
+  body: string;
+  metadataJson: string | null;
+  relatedEventIds: string | null;
+  isAcknowledged: boolean;
+  acknowledgedAt: string | null;
+  generatedAt: string;
+  aiSummary: string | null;
+};
+
+export type InsightSummaryDto = {
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+  recent: InsightAlertDto[];
+};
+
+// ── Investigations ───────────────────────────────────────────────────
+
+export type InvestigationDto = {
+  id: number;
+  clientId: number;
+  eventId: number;
+  status: string;
+  summary: string | null;
+  rootCauseAnalysis: string | null;
+  correctiveActions: string | null;
+  leadInvestigatorUserId: number | null;
+  leadInvestigatorName: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WitnessDto = {
+  id: number;
+  investigationId: number;
+  witnessName: string;
+  witnessContact: string | null;
+  statement: string;
+  statementDate: string | null;
+  sortOrder: number;
+  createdAt: string;
+};
+
+export type EvidenceDto = {
+  id: number;
+  investigationId: number;
+  title: string;
+  description: string | null;
+  evidenceType: string;
+  attachmentId: number | null;
+  collectedAt: string | null;
+  sortOrder: number;
+  createdAt: string;
+};
+
 // ── Webhooks ──────────────────────────────────────────────────────────────────
 
 export type ClientWebhookDto = {
@@ -447,4 +550,54 @@ export type UpdateClientInboundEmailRequest = {
   inboundEmailSlug:             string | null;
   defaultInboundEventTypeId:    number | null;
   defaultInboundWorkflowStatusId: number | null;
+};
+
+// ── Documents ─────────────────────────────────────────────────────────
+
+export type ClientDocumentDto = {
+  id: number;
+  clientId: number;
+  title: string;
+  description: string | null;
+  category: string;
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+  uploadedByUserId: number | null;
+  uploadedByDisplayName: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DocumentReferenceDto = {
+  id: number;
+  documentId: number;
+  documentTitle: string;
+  documentCategory: string;
+  documentFileName: string;
+  createdByUserId: number | null;
+  createdAt: string;
+};
+
+// ── AI ────────────────────────────────────────────────────────────────
+
+export type AiCategorizeResponse = {
+  suggestedEventTypeId: number | null;
+  suggestedEventTypeName: string | null;
+  eventTypeConfidence: number;
+  suggestedRootCauseId: number | null;
+  suggestedRootCauseName: string | null;
+  rootCauseConfidence: number;
+  reasoning: string;
+};
+
+export type AiInvestigateResponse = {
+  suggestedRootCause: string | null;
+  suggestedCorrectiveActions: string | null;
+  reasoning: string;
+};
+
+export type AiTrendAnalysisResponse = {
+  summary: string;
 };

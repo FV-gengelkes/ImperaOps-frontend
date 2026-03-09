@@ -3,10 +3,15 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, AlertTriangle, CircleDot, Copy, Clock, CheckCircle2, XCircle, Trash2 } from "lucide-react";
+import {
+  ArrowLeft, AlertTriangle, CircleDot, Copy, Clock, CheckCircle2, XCircle, Trash2,
+  FileText, CheckSquare, Paperclip, Link2, Search, FileBox, MessageSquare, ClipboardList,
+  FlaskConical,
+} from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/components/toast-context";
+import { isAdmin as checkAdmin, isManagerOrAbove as checkManager } from "@/lib/role-helpers";
 import { createEvent, getEventDetail, updateEvent, cloneEvent, deleteEvent, ApiError } from "@/lib/api";
 import type { CreateEventRequest, EventDetailDto, SlaStatusDto, UpdateEventRequest } from "@/lib/types";
 import { EventDetailsForm } from "./event-details-form";
@@ -14,7 +19,12 @@ import { CustomFieldsCard, type CustomFieldsCardHandle } from "./custom-fields-c
 import { AttachmentsCard } from "./attachments-card";
 import { EventAuditLog } from "./event-audit-log";
 import { TasksCard } from "./tasks-card";
+import { EventLinksCard } from "./event-links-card";
+import { InvestigationCard } from "./investigation-card";
+import { EventDocumentsCard } from "./event-documents-card";
 import { useClientGuard } from "@/hooks/use-client-guard";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 function nowIso() {
   const d = new Date();
@@ -95,33 +105,131 @@ function SlaStatusBar({ sla }: { sla: SlaStatusDto }) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = "details" | "tasks" | "attachments" | "comments" | "audit";
+type Tab = "details" | "tasks" | "attachments" | "comments" | "audit" | "links" | "investigation" | "documents";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "details",     label: "Details"     },
-  { key: "tasks",       label: "Tasks"       },
-  { key: "attachments", label: "Attachments" },
-  { key: "comments",    label: "Comments"    },
-  { key: "audit",       label: "Audit"       },
+const TAB_GROUPS: { group: string; tabs: { key: Tab; label: string; icon: React.ElementType }[] }[] = [
+  {
+    group: "Core",
+    tabs: [
+      { key: "details",     label: "Details",     icon: FileText },
+      { key: "tasks",       label: "Tasks",       icon: CheckSquare },
+      { key: "attachments", label: "Attachments", icon: Paperclip },
+      { key: "documents",   label: "Documents",   icon: FileBox },
+    ],
+  },
+  {
+    group: "Investigation",
+    tabs: [
+      { key: "links",         label: "Links",         icon: Link2 },
+      { key: "investigation", label: "Investigation", icon: Search },
+    ],
+  },
+  {
+    group: "Activity",
+    tabs: [
+      { key: "comments", label: "Comments",  icon: MessageSquare },
+      { key: "audit",    label: "Audit Log", icon: ClipboardList },
+    ],
+  },
 ];
 
 function TabBar({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) => void }) {
   return (
-    <div className="flex items-center gap-1 mb-5">
-      {TABS.map(t => (
-        <button
-          key={t.key}
-          onClick={() => onTabChange(t.key)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            t.key === tab
-              ? "bg-brand text-brand-text"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="border-b border-slate-200 mb-5">
+      <div className="flex items-end gap-0 -mb-px">
+        {TAB_GROUPS.map((g, gi) => (
+          <div key={g.group} className="flex flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-0.5">
+              {g.group}
+            </span>
+            <div className="flex items-center">
+              {gi > 0 && <div className="w-px h-6 bg-slate-200 mx-0.5 self-center mb-1" />}
+              {g.tabs.map(t => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => onTabChange(t.key)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      t.key === tab
+                        ? "border-brand text-brand"
+                        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+// ── Investigation Progress Bar ────────────────────────────────────────────────
+
+const INV_STEPS = [
+  { key: "draft",       label: "Draft" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "review",      label: "Review" },
+  { key: "completed",   label: "Completed" },
+] as const;
+
+function InvestigationProgressBar({ status, onNavigate }: { status: string; onNavigate: () => void }) {
+  const currentIdx = INV_STEPS.findIndex(s => s.key === status);
+
+  return (
+    <button
+      onClick={onNavigate}
+      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 mb-5 flex items-center gap-4 hover:border-brand/40 transition-colors cursor-pointer text-left group"
+    >
+      <div className="flex items-center gap-1.5 shrink-0">
+        <FlaskConical size={14} className="text-purple-600" />
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Investigation</span>
+      </div>
+
+      <div className="flex-1 flex items-center gap-0">
+        {INV_STEPS.map((step, i) => {
+          const done = i <= currentIdx;
+          const isCurrent = i === currentIdx;
+          const isLast = i === INV_STEPS.length - 1;
+          return (
+            <div key={step.key} className="flex items-center flex-1">
+              <div className="flex flex-col items-center gap-0.5">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                  isCurrent && status === "completed"
+                    ? "bg-success text-white border-success"
+                    : isCurrent
+                    ? "bg-purple-600 text-white border-purple-600"
+                    : done
+                    ? "bg-purple-600 text-white border-purple-600"
+                    : "bg-white text-slate-400 border-slate-300"
+                }`}>
+                  {done && !isCurrent ? <CheckCircle2 size={14} /> : i + 1}
+                </div>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${
+                  isCurrent ? "text-slate-800" : done ? "text-slate-600" : "text-slate-400"
+                }`}>
+                  {step.label}
+                </span>
+              </div>
+              {!isLast && (
+                <div className="flex-1 mx-1.5">
+                  <div className={`h-0.5 rounded-full ${i < currentIdx ? "bg-purple-600" : "bg-slate-200"}`} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <span className="text-xs text-brand font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        View →
+      </span>
+    </button>
   );
 }
 
@@ -152,8 +260,8 @@ export default function EventDetailsPage() {
   useClientGuard(isNew ? null : eventClientId || null, "/events/list");
 
   const role             = clients.find(c => c.id === eventClientId)?.role;
-  const isAdmin          = isSuperAdmin || role === "Admin";
-  const isManagerOrAbove = isSuperAdmin || ["Admin", "Manager"].includes(role ?? "");
+  const isAdmin          = checkAdmin(isSuperAdmin, role);
+  const isManagerOrAbove = checkManager(isSuperAdmin, role);
 
   const [loading, setLoading]     = useState(false);
   const [fetching, setFetching]   = useState(!isNew);
@@ -162,6 +270,7 @@ export default function EventDetailsPage() {
   const [submitted, setSubmitted] = useState(false);
   const [cloning, setCloning]     = useState(false);
   const [deleting, setDeleting]   = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [title, setTitle]               = useState<string>("");
   const [eventTypeId, setEventTypeId]   = useState<number>(0);
@@ -178,9 +287,13 @@ export default function EventDetailsPage() {
   const [rootCauseId, setRootCauseId]   = useState<number | null>(null);
   const [correctiveAction, setCorrectiveAction] = useState<string | null>(null);
   const [sla, setSla]                   = useState<SlaStatusDto | null>(null);
+  const [hasInvestigation, setHasInvestigation] = useState(false);
+  const [investigationStatus, setInvestigationStatus] = useState<string | null>(null);
 
   const [savedForm, setSavedForm]                   = useState<FormSnapshot | null>(null);
   const [isCustomFieldsDirty, setIsCustomFieldsDirty] = useState(false);
+  const [isInvestigationDirty, setIsInvestigationDirty] = useState(false);
+  const [invResetKey, setInvResetKey] = useState(0);
 
   const canEdit = isNew
     ? isManagerOrAbove
@@ -192,14 +305,9 @@ export default function EventDetailsPage() {
 
   const currentForm: FormSnapshot = { title, eventTypeId, workflowStatusId, occurredAt, location, description, ownerUserId, rootCauseId, correctiveAction };
   const isFormDirty = savedForm !== null && !snapshotEquals(currentForm, savedForm);
-  const isDirty     = !isNew && (isFormDirty || isCustomFieldsDirty);
+  const isDirty     = !isNew && (isFormDirty || isCustomFieldsDirty || isInvestigationDirty);
 
-  useEffect(() => {
-    if (!isDirty) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
+  useUnsavedChanges(isDirty);
 
   useEffect(() => {
     setLoadError(""); setSaveError("");
@@ -215,7 +323,7 @@ export default function EventDetailsPage() {
     setFetching(true);
     setLoadError("");
     try {
-      const detail: EventDetailDto = await getEventDetail(publicId);
+      const detail: EventDetailDto = await getEventDetail(publicId, clientId || undefined);
       setEventId(detail.id);
       setEventClientId(detail.clientId);
       setTitle(detail.title);
@@ -233,6 +341,8 @@ export default function EventDetailsPage() {
       setRootCauseId(detail.rootCauseId ?? null);
       setCorrectiveAction(detail.correctiveAction ?? null);
       setSla(detail.sla ?? null);
+      setHasInvestigation(detail.hasInvestigation);
+      setInvestigationStatus(detail.investigationStatus ?? null);
       setSavedForm({
         title: detail.title,
         eventTypeId: detail.eventTypeId,
@@ -315,6 +425,7 @@ export default function EventDetailsPage() {
   async function onDiscard() {
     setSaveError(""); setSubmitted(false);
     customFieldsRef.current?.reset();
+    setInvResetKey(k => k + 1);
     await loadExisting();
   }
 
@@ -332,7 +443,6 @@ export default function EventDetailsPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Permanently delete this event? This cannot be undone.")) return;
     setDeleting(true);
     try {
       await deleteEvent(publicId);
@@ -402,6 +512,11 @@ export default function EventDetailsPage() {
       {/* Tab switcher — edit mode only */}
       {!isNew && <TabBar tab={tab} onTabChange={navigateTab} />}
 
+      {/* Investigation progress bar */}
+      {!isNew && hasInvestigation && investigationStatus && tab !== "investigation" && (
+        <InvestigationProgressBar status={investigationStatus} onNavigate={() => navigateTab("investigation")} />
+      )}
+
       {/* Details tab: form + custom fields */}
       {(isNew || tab === "details") && (
         <>
@@ -458,6 +573,21 @@ export default function EventDetailsPage() {
         <AttachmentsCard publicId={publicId} />
       )}
 
+      {/* Links tab */}
+      {!isNew && tab === "links" && eventId > 0 && (
+        <EventLinksCard publicId={publicId} eventId={eventId} />
+      )}
+
+      {/* Investigation tab */}
+      {!isNew && tab === "investigation" && (
+        <InvestigationCard key={invResetKey} publicId={publicId} onDirtyChange={setIsInvestigationDirty} />
+      )}
+
+      {/* Documents tab */}
+      {!isNew && tab === "documents" && (
+        <EventDocumentsCard publicId={publicId} />
+      )}
+
       {/* Comments tab */}
       {!isNew && tab === "comments" && (
         <EventAuditLog publicId={publicId} view="comments" />
@@ -485,9 +615,9 @@ export default function EventDetailsPage() {
                   <button
                     onClick={onDiscard}
                     disabled={loading || !isDirty}
-                    className="text-sm text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-slate-200 rounded-lg hover:bg-slate-300 disabled:opacity-0 disabled:cursor-not-allowed transition-all"
                   >
-                    Discard
+                    Cancel
                   </button>
                 </>
               )}
@@ -496,7 +626,7 @@ export default function EventDetailsPage() {
               )}
               {isAdmin && (
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   disabled={deleting || loading}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
@@ -518,6 +648,16 @@ export default function EventDetailsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Event"
+        description="Permanently delete this event? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

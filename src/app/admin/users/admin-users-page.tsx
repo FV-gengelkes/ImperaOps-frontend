@@ -5,6 +5,8 @@ import {
   AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search,
   Shield, ShieldCheck, ShieldOff, X, XCircle,
 } from "lucide-react";
+import { Modal } from "@/components/modal";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   adminCreateUser, adminDisableUserTotp, adminGetUsers, adminToggleUserActive, adminUpdateUser,
 } from "@/lib/api";
@@ -87,18 +89,7 @@ function GrantSuperAdminModal({
     "placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Shield size={16} className="text-amber-500" />
-            <h2 className="text-base font-semibold text-white">Super Admin Access</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal open={true} onClose={onClose} title="Super Admin Access">
         <div className="p-6 space-y-5">
           <div className="flex gap-3 px-4 py-3.5 rounded-lg bg-red-950/50 border border-red-800/60">
             <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
@@ -227,8 +218,7 @@ function GrantSuperAdminModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -242,6 +232,8 @@ export function AdminUsersPage() {
   const [grantModal, setGrantModal]   = useState(false);
   const [revoking, setRevoking]       = useState<number | null>(null);
   const [disabling2fa, setDisabling2fa] = useState<number | null>(null);
+  const [confirmRevoke, setConfirmRevoke]     = useState<AdminUserDto | null>(null);
+  const [confirmDisable2fa, setConfirmDisable2fa] = useState<AdminUserDto | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -260,9 +252,6 @@ export function AdminUsersPage() {
   );
 
   async function handleRevoke(user: AdminUserDto) {
-    if (!window.confirm(
-      `Remove super admin access from ${user.displayName}?\n\nThey will remain active and keep any existing client access.`
-    )) return;
     setRevoking(user.id);
     try {
       await adminUpdateUser(user.id, {
@@ -279,9 +268,6 @@ export function AdminUsersPage() {
   }
 
   async function handleDisable2fa(user: AdminUserDto) {
-    if (!window.confirm(
-      `Disable two-factor authentication for ${user.displayName}?\n\nThey will be able to log in with just their password.`
-    )) return;
     setDisabling2fa(user.id);
     try {
       await adminDisableUserTotp(user.id);
@@ -394,7 +380,7 @@ export function AdminUsersPage() {
                       <div className="flex items-center justify-end gap-1">
                         {user.isTotpEnabled && (
                           <button
-                            onClick={() => void handleDisable2fa(user)}
+                            onClick={() => setConfirmDisable2fa(user)}
                             disabled={disabling2fa === user.id}
                             title="Disable two-factor authentication"
                             className="p-1.5 rounded-lg text-slate-600 hover:text-amber-400 hover:bg-amber-950/30 transition disabled:opacity-50"
@@ -413,7 +399,7 @@ export function AdminUsersPage() {
                           <RefreshCw size={13} />
                         </button>
                         <button
-                          onClick={() => void handleRevoke(user)}
+                          onClick={() => setConfirmRevoke(user)}
                           disabled={revoking === user.id}
                           title="Revoke super admin access"
                           className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-950/30 transition disabled:opacity-50"
@@ -449,6 +435,26 @@ export function AdminUsersPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmRevoke}
+        onClose={() => setConfirmRevoke(null)}
+        onConfirm={() => { if (confirmRevoke) void handleRevoke(confirmRevoke); }}
+        title="Revoke Super Admin"
+        description={confirmRevoke ? `Remove super admin access from ${confirmRevoke.displayName}? They will remain active and keep any existing client access.` : ""}
+        confirmLabel="Revoke"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        open={!!confirmDisable2fa}
+        onClose={() => setConfirmDisable2fa(null)}
+        onConfirm={() => { if (confirmDisable2fa) void handleDisable2fa(confirmDisable2fa); }}
+        title="Disable Two-Factor Authentication"
+        description={confirmDisable2fa ? `Disable two-factor authentication for ${confirmDisable2fa.displayName}? They will be able to log in with just their password.` : ""}
+        confirmLabel="Disable 2FA"
+        variant="warning"
+      />
     </div>
   );
 }

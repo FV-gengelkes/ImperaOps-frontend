@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { EventListItemDto } from "@/lib/types";
-import { ArrowRight, MapPin, User } from "lucide-react";
+import { ArrowRight, Link2, MapPin, User } from "lucide-react";
 
 function SkeletonRow() {
   return (
@@ -120,12 +120,19 @@ export function EventListTable({
 
                 {/* Public ID */}
                 <td className="px-5 py-3.5 whitespace-nowrap">
-                  <Link
-                    href={`/events/${item.publicId}/details`}
-                    className="font-mono text-xs font-semibold text-brand-link bg-brand/10 border border-brand/20 rounded px-1.5 py-0.5 hover:bg-brand/20 transition-colors"
-                  >
-                    {item.publicId}
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/events/${item.publicId}/details`}
+                      className="font-mono text-xs font-semibold text-brand-link bg-brand/10 border border-brand/20 rounded px-1.5 py-0.5 hover:bg-brand/20 transition-colors"
+                    >
+                      {item.publicId}
+                    </Link>
+                    {item.linkGroupCount > 0 && (
+                      <span title={`Linked to ${item.linkGroupCount} group(s)`} className="text-brand/60">
+                        <Link2 size={12} />
+                      </span>
+                    )}
+                  </div>
                 </td>
 
                 {/* Occurred */}

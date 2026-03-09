@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, FlaskConical } from "lucide-react";
+import { AlertTriangle, FlaskConical, Sparkles, Loader2 } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
-import { getClientUsers, getEventTypes, getWorkflowStatuses, getRootCauseTaxonomy } from "@/lib/api";
+import { useToast } from "@/components/toast-context";
+import { getClientUsers, getEventTypes, getWorkflowStatuses, getRootCauseTaxonomy, aiCategorize } from "@/lib/api";
 import type { ClientUserDto, EventTypeDto, WorkflowStatusDto, RootCauseTaxonomyItemDto } from "@/lib/types";
 
 function nowIsoFromLocalInput(v: string) {
@@ -110,7 +111,9 @@ export function EventDetailsForm(props: Props) {
   } = props;
 
   const { clientId } = useClientId();
+  const toast = useToast();
   const isNew = mode === "create";
+  const [aiSuggesting, setAiSuggesting] = useState(false);
 
   const [typeOptions, setTypeOptions]     = useState<EventTypeDto[]>([]);
   const [statusOptions, setStatusOptions] = useState<WorkflowStatusDto[]>([]);
@@ -137,6 +140,32 @@ export function EventDetailsForm(props: Props) {
       setLookupsLoading(false);
     });
   }, [clientId]);
+
+  async function handleAiSuggest() {
+    if (!clientId || !title.trim() || !description.trim()) {
+      toast.error("Enter a title and description before using AI Suggest.");
+      return;
+    }
+    setAiSuggesting(true);
+    try {
+      const result = await aiCategorize(title, description, clientId);
+      if (result.suggestedEventTypeId && result.eventTypeConfidence > 0.5) {
+        setEventTypeId(result.suggestedEventTypeId);
+      }
+      if (result.suggestedRootCauseId && result.rootCauseConfidence > 0.5) {
+        setRootCauseId(result.suggestedRootCauseId);
+      }
+      const parts: string[] = [];
+      if (result.suggestedEventTypeName)
+        parts.push(`Type: ${result.suggestedEventTypeName} (${(result.eventTypeConfidence * 100).toFixed(0)}%)`);
+      if (result.suggestedRootCauseName)
+        parts.push(`Root Cause: ${result.suggestedRootCauseName} (${(result.rootCauseConfidence * 100).toFixed(0)}%)`);
+      toast.success(parts.length > 0 ? `AI suggests: ${parts.join(", ")}` : result.reasoning);
+    } catch (err: any) {
+      toast.error(err?.message ?? "AI suggestion failed");
+    }
+    setAiSuggesting(false);
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -213,6 +242,7 @@ export function EventDetailsForm(props: Props) {
           {/* Row 1: Type + Occurred At */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <Field label="Event Type">
+              <div className="flex gap-2">
               <select
                 className={inputCls}
                 value={eventTypeId}
@@ -227,6 +257,19 @@ export function EventDetailsForm(props: Props) {
                   ))
                 )}
               </select>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={handleAiSuggest}
+                  disabled={aiSuggesting || lookupsLoading}
+                  className="shrink-0 px-3 py-2 text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-200 rounded-xl hover:bg-purple-100 disabled:opacity-50 transition flex items-center gap-1.5"
+                  title="AI Suggest event type & root cause"
+                >
+                  {aiSuggesting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  AI
+                </button>
+              )}
+              </div>
             </Field>
 
             <Field label="Occurred At">

@@ -9,10 +9,10 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, Loader2, Building2, CheckSquare2, Square, Calendar } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, Loader2, Building2, CheckSquare2, Square, Calendar, Lightbulb, AlertTriangle as AlertTriangleIcon, AlertCircle, Info, Clock } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
-import { adminGetClients, getEventAnalytics } from "@/lib/api";
-import type { ClientAccessDto, EventAnalyticsDto } from "@/lib/types";
+import { adminGetClients, getEventAnalytics, getInsightSummary } from "@/lib/api";
+import type { ClientAccessDto, EventAnalyticsDto, InsightSummaryDto } from "@/lib/types";
 import { useAuth } from "@/components/auth-context";
 import { useTheme } from "@/components/theme-context";
 import { MyTasksCard } from "./my-tasks-card";
@@ -135,9 +135,10 @@ interface KpiCardProps {
   change?: number;
   changeLabel?: string;
   goodWhenDown?: boolean;
+  href?: string;
 }
 
-function KpiCard({ title, value, unit, change, changeLabel, goodWhenDown }: KpiCardProps) {
+function KpiCard({ title, value, unit, change, changeLabel, goodWhenDown, href }: KpiCardProps) {
   const showTrend = change !== undefined && changeLabel !== undefined;
   const isUp = (change ?? 0) >= 0;
   const isGood = goodWhenDown ? !isUp : isUp;
@@ -146,8 +147,10 @@ function KpiCard({ title, value, unit, change, changeLabel, goodWhenDown }: KpiC
     ? "text-emerald-700 bg-emerald-50 border-emerald-200"
     : "text-red-600 bg-red-50 border-red-200";
 
+  const Tag = href ? "a" : "div";
+
   return (
-    <div className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200">
+    <Tag href={href} className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200">
       <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{title}</p>
       <p className="text-3xl font-extrabold text-slate-900 dark:text-steel-white leading-none tabular-nums">
         {typeof value === "number" ? value.toLocaleString() : value}
@@ -159,7 +162,43 @@ function KpiCard({ title, value, unit, change, changeLabel, goodWhenDown }: KpiC
           {Math.abs(change!).toFixed(1)}% {changeLabel}
         </span>
       )}
-    </div>
+    </Tag>
+  );
+}
+
+// ── SLA Breached card ─────────────────────────────────────────────
+
+function SlaBreachedCard({ count }: { count: number }) {
+  const hasBreach = count > 0;
+  return (
+    <a
+      href="/events/list?slaBreached=true"
+      className={`rounded-2xl border shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200 ${
+        hasBreach
+          ? "bg-red-50 dark:bg-critical/10 border-red-200 dark:border-critical/30"
+          : "bg-white dark:bg-graphite border-slate-200 dark:border-slate-line"
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        <Clock size={12} className={hasBreach ? "text-critical" : "text-slate-400"} />
+        <p className={`text-[11px] font-semibold uppercase tracking-widest ${
+          hasBreach ? "text-critical" : "text-slate-400 dark:text-slate-500"
+        }`}>
+          Past SLA
+        </p>
+      </div>
+      <p className={`text-3xl font-extrabold leading-none tabular-nums ${
+        hasBreach ? "text-critical" : "text-slate-900 dark:text-steel-white"
+      }`}>
+        {count}
+      </p>
+      {hasBreach && (
+        <span className="inline-flex items-center gap-1 self-start px-2 py-0.5 rounded-full border text-[11px] font-semibold text-red-600 bg-red-50 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/40">
+          <AlertTriangleIcon size={10} />
+          overdue
+        </span>
+      )}
+    </a>
   );
 }
 
@@ -191,33 +230,52 @@ export default function DashboardPage() {
   const [available, setAvailable] = useState<ClientAccessDto[]>([]);
   const [selected, setSelected]   = useState<Set<number>>(new Set());
   const [rangeKey, setRangeKey]   = useState<RangeKey>("12m");
+  const [insightSummary, setInsightSummary] = useState<InsightSummaryDto | null>(null);
 
   const activeRange = RANGES.find(r => r.key === rangeKey)!;
   const hasClient = clientId > 0;
   const isLive    = !!analytics;
 
-  // Build the list of clients the user can toggle
+  // Build the list of clients the user can toggle — scoped to current client + children
   useEffect(() => {
     if (!hasClient) { setAvailable([]); return; }
 
     if (isSuperAdmin) {
       adminGetClients()
         .then(dtos => {
-          const mapped: ClientAccessDto[] = dtos
-            .filter(c => c.isActive)
+          const all: ClientAccessDto[] = dtos
+            .filter(c => c.status !== "Inactive")
             .map(c => ({ id: c.id, name: c.name, role: "Admin", parentClientId: c.parentClientId }));
-          setAvailable(mapped);
+          // Show current client + its children (if it's a parent)
+          const current = all.find(c => c.id === clientId);
+          const isParent = current && !current.parentClientId;
+          const scoped = isParent
+            ? all.filter(c => c.id === clientId || c.parentClientId === clientId)
+            : [current ?? { id: clientId, name: "Unknown", role: "Admin", parentClientId: null }];
+          setAvailable(scoped);
         })
-        .catch(() => setAvailable(clients));
+        .catch(() => setAvailable(clients.filter(c => c.id === clientId)));
     } else {
-      setAvailable(clients);
+      // Non-super-admin: show current client + siblings under same parent
+      const current = clients.find(c => c.id === clientId);
+      if (current?.parentClientId) {
+        setAvailable(clients.filter(c => c.parentClientId === current.parentClientId || c.id === current.parentClientId));
+      } else {
+        setAvailable(clients.filter(c => c.id === clientId || c.parentClientId === clientId));
+      }
     }
-  }, [hasClient, isSuperAdmin, clients]);
+  }, [hasClient, clientId, isSuperAdmin, clients]);
 
   // When the active client changes, reset selection to just that client
   useEffect(() => {
     if (clientId > 0) setSelected(new Set([clientId]));
   }, [clientId]);
+
+  // Fetch insights summary
+  useEffect(() => {
+    if (!hasClient) return;
+    getInsightSummary(clientId).then(setInsightSummary).catch(() => {});
+  }, [hasClient, clientId]);
 
   function toggleClient(id: number) {
     setSelected(prev => {
@@ -374,19 +432,36 @@ export default function DashboardPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total Events" value={isLive ? analytics!.total : mockKpi.total}
-          change={isLive ? undefined : mockKpi.totalChange} changeLabel={isLive ? undefined : "vs prior period"} />
-        <KpiCard title="Open" value={isLive ? analytics!.open : mockKpi.open}
-          change={isLive ? undefined : mockKpi.openChange} changeLabel={isLive ? undefined : "vs prior period"} goodWhenDown />
-        <KpiCard
-          title="This Month"
-          value={isLive ? analytics!.thisMonth : mockKpi.thisMonth}
-          change={isLive ? thisMonthTrend : mockKpi.thisMonthChange}
-          changeLabel="vs last month"
-          goodWhenDown
-        />
-        <KpiCard title="Closed" value={isLive ? analytics!.closed : mockKpi.total - mockKpi.open} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {(() => {
+          const now = new Date();
+          const thisMonthFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          const thisMonthTo = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-${String(nextMonth.getDate()).padStart(2, "0")}`;
+          return (<>
+            <KpiCard title="Total Events" value={isLive ? analytics!.total : mockKpi.total}
+              change={isLive ? undefined : mockKpi.totalChange} changeLabel={isLive ? undefined : "vs prior period"}
+              href="/events/list" />
+            <KpiCard title="Open" value={isLive ? analytics!.open : mockKpi.open}
+              change={isLive ? undefined : mockKpi.openChange} changeLabel={isLive ? undefined : "vs prior period"} goodWhenDown
+              href="/events/list?isClosed=false" />
+            <KpiCard
+              title="This Month"
+              value={isLive ? analytics!.thisMonth : mockKpi.thisMonth}
+              change={isLive ? thisMonthTrend : mockKpi.thisMonthChange}
+              changeLabel="vs last month"
+              goodWhenDown
+              href={`/events/list?dateFrom=${thisMonthFrom}&dateTo=${thisMonthTo}`}
+            />
+            <KpiCard title="Closed" value={isLive ? analytics!.closed : mockKpi.total - mockKpi.open}
+              href="/events/list?isClosed=true" />
+          </>);
+        })()}
+        {isLive ? (
+          <SlaBreachedCard count={analytics!.slaBreachedCount} />
+        ) : (
+          <KpiCard title="Past SLA" value={2} />
+        )}
       </div>
 
       {/* My Tasks + Workload */}
@@ -394,6 +469,43 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MyTasksCard clientId={clientId} />
           <WorkloadCard clientId={clientId} />
+        </div>
+      )}
+
+      {/* Insights Summary */}
+      {hasClient && insightSummary && insightSummary.total > 0 && (
+        <div className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Lightbulb size={16} className="text-warning" />
+              <h3 className="font-semibold text-slate-800 dark:text-steel-white">Insights</h3>
+              <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full font-semibold">{insightSummary.total} unread</span>
+            </div>
+            <a href="/insights" className="text-xs font-semibold text-brand hover:text-brand-hover transition">View all</a>
+          </div>
+          <div className="flex items-center gap-3 mb-3">
+            {insightSummary.critical > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-critical"><AlertTriangleIcon size={11} /> {insightSummary.critical} critical</span>
+            )}
+            {insightSummary.warning > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning"><AlertCircle size={11} /> {insightSummary.warning} warning</span>
+            )}
+            {insightSummary.info > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-info"><Info size={11} /> {insightSummary.info} info</span>
+            )}
+          </div>
+          {insightSummary.recent.length > 0 && (
+            <div className="space-y-2">
+              {insightSummary.recent.map(a => (
+                <div key={a.id} className="flex items-center gap-2 text-sm">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    a.severity === "critical" ? "bg-critical" : a.severity === "warning" ? "bg-warning" : "bg-info"
+                  }`} />
+                  <span className="text-slate-700 dark:text-slate-300 truncate">{a.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { login as apiLogin, clearStoredToken, getStoredToken, setStoredToken } from "@/lib/api";
+import { login as apiLogin, setActiveClient as apiSetActiveClient, clearStoredToken, getStoredToken, setStoredToken } from "@/lib/api";
 import type { AuthResultDto, ClientAccessDto, LoginResult } from "@/lib/types";
 
 const CLIENT_ID_KEY       = "imperaops.clientId";
@@ -30,6 +30,9 @@ type AuthContextValue = {
   loginWithResult: (result: AuthResultDto) => void;
   logout: () => void;
   updateUser: (displayName: string, email: string) => void;
+  /** Increment to signal components to re-fetch client lists */
+  refreshClients: () => void;
+  clientRefreshKey: number;
   isAuthenticated: boolean;
   /** false until localStorage has been read on first mount */
   ready: boolean;
@@ -43,8 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [activeClientId, setActiveClientIdState] = useState<number>(0);
   const [ready, setReady]           = useState(false);
+  const [clientRefreshKey, setClientRefreshKey] = useState(0);
 
-  // Rehydrate from localStorage on mount
+  // Rehydrate from localStorage on mount (runs once, before AppShell renders content)
   useEffect(() => {
     const token       = getStoredToken();
     const userJson    = window.localStorage.getItem(AUTH_USER_KEY);
@@ -56,7 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token && userJson) {
       try {
         const u = JSON.parse(userJson) as AuthUser;
-        // Back-fill id from token for sessions that predate this field
         if (!u.id) u.id = parseUserIdFromToken(token);
         setUser(u);
         const parsedClients: ClientAccessDto[] = clientsJson ? JSON.parse(clientsJson) : [];
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsSuperAdmin(savedSuperAdmin);
         setActiveClientIdState(savedClientId || parsedClients[0]?.id || 0);
       } catch {
-        logout(); // Corrupted storage — clear it
+        // Corrupted storage — will be cleared on logout
       }
     }
     setReady(true);
@@ -74,20 +77,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setActiveClientId = useCallback((id: number) => {
     setActiveClientIdState(id);
     window.localStorage.setItem(CLIENT_ID_KEY, String(id));
+    // Persist to server (fire-and-forget)
+    apiSetActiveClient(id).catch(() => {});
   }, []);
 
   const applyAuthResult = useCallback((result: AuthResultDto) => {
     setStoredToken(result.token);
     const u: AuthUser = { id: parseUserIdFromToken(result.token), displayName: result.displayName, email: result.email };
     setUser(u);
-    setClients(result.clients);
     setIsSuperAdmin(result.isSuperAdmin);
+    // Ensure active client is in the clients list so sidebar can display it immediately
+    let clientsList = result.clients;
+    const serverClientId = result.activeClientId ?? 0;
+    if (serverClientId && result.activeClientName && !clientsList.some(c => c.id === serverClientId)) {
+      clientsList = [{ id: serverClientId, name: result.activeClientName, role: "Admin", parentClientId: null }, ...clientsList];
+    }
+    setClients(clientsList);
     window.localStorage.setItem(AUTH_USER_KEY,       JSON.stringify(u));
-    window.localStorage.setItem(AUTH_CLIENTS_KEY,    JSON.stringify(result.clients));
+    window.localStorage.setItem(AUTH_CLIENTS_KEY,    JSON.stringify(clientsList));
     window.localStorage.setItem(AUTH_SUPERADMIN_KEY, String(result.isSuperAdmin));
-    const firstClientId = result.clients[0]?.id ?? 0;
-    setActiveClientId(firstClientId);
-  }, [setActiveClientId]);
+    // Use server-persisted active client, fall back to first client
+    const restoredId = (serverClientId && (result.isSuperAdmin || clientsList.some(c => c.id === serverClientId)))
+      ? serverClientId
+      : clientsList[0]?.id ?? 0;
+    // Set state + localStorage without re-persisting to server (server already knows)
+    setActiveClientIdState(restoredId);
+    window.localStorage.setItem(CLIENT_ID_KEY, String(restoredId));
+  }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const result = await apiLogin(email, password);
@@ -108,6 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(updated));
       return updated;
     });
+  }, []);
+
+  const refreshClients = useCallback(() => {
+    setClientRefreshKey(k => k + 1);
   }, []);
 
   const logout = useCallback(() => {
@@ -132,9 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginWithResult,
     logout,
     updateUser,
+    refreshClients,
+    clientRefreshKey,
     isAuthenticated: !!user,
     ready,
-  }), [user, clients, activeClientId, isSuperAdmin, setActiveClientId, login, loginWithResult, logout, updateUser, ready]);
+  }), [user, clients, activeClientId, isSuperAdmin, setActiveClientId, login, loginWithResult, logout, updateUser, refreshClients, clientRefreshKey, ready]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

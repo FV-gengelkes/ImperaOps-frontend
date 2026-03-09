@@ -100,14 +100,30 @@ function FieldInput({ field, value, onChange, hasError }: {
       );
     case "date":
       return <input type="date" className={cls} value={value} onChange={e => onChange(e.target.value)} />;
-    case "boolean":
+    case "boolean": {
+      const checked = value === "true";
       return (
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-            checked={value === "true"} onChange={e => onChange(e.target.checked ? "true" : "false")} />
-          <span className="text-sm text-slate-700 mt-px">{value === "true" ? "Yes" : "No"}</span>
-        </label>
+        <div
+          onClick={() => onChange(checked ? "false" : "true")}
+          style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12, cursor: "pointer", padding: "4px 0", userSelect: "none" }}
+        >
+          <span style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 20, height: 20, flexShrink: 0, borderRadius: 4,
+            border: `2px solid ${checked ? "var(--color-brand)" : "#cbd5e1"}`,
+            backgroundColor: checked ? "var(--color-brand)" : "#fff",
+            transition: "background-color 0.15s, border-color 0.15s",
+          }}>
+            {checked && (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 6l2.5 2.5 4.5-5" />
+              </svg>
+            )}
+          </span>
+          <span style={{ fontSize: 14, color: "#334155" }}>{checked ? "Yes" : "No"}</span>
+        </div>
       );
+    }
     case "dropdown":
       return (
         <select className={cls} value={value} onChange={e => onChange(e.target.value)}>

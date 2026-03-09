@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Webhook, Plus, Trash2, RefreshCw, Pencil, X, Check } from "lucide-react";
 import { useClientId } from "@/components/client-id-context";
 import { useAuth } from "@/components/auth-context";
+import { isAdmin as checkAdmin } from "@/lib/role-helpers";
 import { getWebhooks, createWebhook, updateWebhook, deleteWebhook } from "@/lib/api";
 import type { ClientWebhookDto, UpsertWebhookRequest } from "@/lib/types";
 import { useToast } from "@/components/toast-context";
@@ -162,7 +163,7 @@ export default function WebhooksPage() {
   const toast = useToast();
 
   const role    = clients.find(c => c.id === clientId)?.role;
-  const isAdmin = isSuperAdmin || role === "Admin";
+  const isAdmin = checkAdmin(isSuperAdmin, role);
 
   const [webhooks, setWebhooks] = useState<ClientWebhookDto[]>([]);
   const [loading,  setLoading]  = useState(true);

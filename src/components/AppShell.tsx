@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, ChevronDown, Keyboard, LayoutDashboard, LogOut, Menu, Moon, Plus, Search, Settings, Shield, ShieldAlert, Sun, User, Users, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Keyboard, LayoutDashboard, Lightbulb, LogOut, Menu, Moon, Plus, Search, Settings, Shield, ShieldAlert, Sun, User, Users, X } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { useBranding } from "./branding-context";
 import { useClientChangeRedirect } from "@/hooks/use-client-change-redirect";
@@ -67,6 +67,7 @@ function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
 
 const analytics = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/insights",  label: "Insights",  icon: Lightbulb },
 ];
 
 const operations = [
@@ -273,7 +274,7 @@ function buildHierarchy(list: ClientAccessDto[]): ClientAccessDto[] {
 }
 
 function ClientSwitcher() {
-  const { clients, activeClientId, setActiveClientId, isSuperAdmin } = useAuth();
+  const { clients, activeClientId, setActiveClientId, isSuperAdmin, clientRefreshKey } = useAuth();
   const [open,       setOpen]       = useState(false);
   const [allClients, setAllClients] = useState<ClientAccessDto[]>([]);
   const ref = useRef<HTMLDivElement>(null);
@@ -286,21 +287,27 @@ function ClientSwitcher() {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  // Super admins see every active client; fetch once on mount.
+  // Super admins: fetch all clients, then scope to current client's family (parent + children).
   useEffect(() => {
     if (!isSuperAdmin) return;
     adminGetClients().then(dtos => {
       setAllClients(
         dtos
-          .filter(c => c.isActive)
+          .filter(c => c.status !== "Inactive")
           .map(c => ({ id: c.id, name: c.name, role: "Admin", parentClientId: c.parentClientId }))
       );
     }).catch(() => {});
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, activeClientId, clientRefreshKey]);
 
-  const displayClients = isSuperAdmin && allClients.length > 0
-    ? buildHierarchy(allClients)
-    : clients;
+  const displayClients = (() => {
+    if (!isSuperAdmin || allClients.length === 0) return clients;
+    const current = allClients.find(c => c.id === activeClientId);
+    if (!current) return allClients.filter(c => c.id === activeClientId);
+    // Find the family root: if current is a child, go to its parent; otherwise current is the root
+    const rootId = current.parentClientId ?? current.id;
+    const family = allClients.filter(c => c.id === rootId || c.parentClientId === rootId);
+    return buildHierarchy(family);
+  })();
 
   if (displayClients.length === 0) return null;
 
@@ -480,7 +487,7 @@ function MobileDrawer({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
-  const { user, logout, isAuthenticated, isSuperAdmin } = useAuth();
+  const { user, logout, isAuthenticated, isSuperAdmin, ready } = useAuth();
   const { theme, toggle } = useTheme();
   const { branding } = useBranding();
   const logoSrc    = branding?.logoUrl    ?? "/logo-icon.png";
@@ -536,7 +543,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   // Login page and public report pages render full-screen without the shell
-  if (pathname === "/login" || pathname.startsWith("/report/")) return <>{children}</>;
+  if (pathname === "/login" || pathname.startsWith("/report/") || pathname === "/forgot-password" || pathname === "/set-password") return <>{children}</>;
+
+  // Wait for auth hydration before rendering the shell to avoid flash
+  if (!ready) return null;
 
   function handleLogout() {
     setDrawerOpen(false);

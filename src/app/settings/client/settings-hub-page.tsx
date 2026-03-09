@@ -6,7 +6,7 @@ import { settingsSections } from "./settings-nav";
 
 export default function SettingsHubPage() {
   return (
-    <div className="pt-8 sm:pt-10 px-4 sm:px-8 pb-8 max-w-4xl">
+    <div className="pt-8 sm:pt-10 px-4 sm:px-8 pb-8 max-w-7xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
@@ -31,7 +31,7 @@ export default function SettingsHubPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {section.items.map((item) => {
                 const Icon = item.icon;
                 return (

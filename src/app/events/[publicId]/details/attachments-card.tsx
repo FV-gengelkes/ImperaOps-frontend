@@ -9,6 +9,7 @@ import {
   uploadAttachment,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth-context";
+import { useToast } from "@/components/toast-context";
 import type { AttachmentDto } from "@/lib/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ function AttachmentRow({
   onPreview: (attachment: AttachmentDto) => void;
   thumbnailUrl?: string;
 }) {
+  const toast = useToast();
   const [actioning, setActioning] = useState(false);
   const [deleting, setDeleting]   = useState(false);
   const image = isImage(attachment.contentType);
@@ -146,7 +148,7 @@ function AttachmentRow({
         window.open(url, "_blank");
       }
     } catch (e: any) {
-      alert(e?.message ?? "Failed to open file.");
+      toast.error(e?.message ?? "Failed to open file.");
     } finally {
       setActioning(false);
     }
@@ -158,7 +160,7 @@ function AttachmentRow({
       const { url } = await getAttachmentUrl(publicId, attachment.id);
       window.open(url, "_blank");
     } catch (e: any) {
-      alert(e?.message ?? "Failed to get download link.");
+      toast.error(e?.message ?? "Failed to get download link.");
     } finally {
       setActioning(false);
     }
@@ -171,7 +173,7 @@ function AttachmentRow({
       await deleteAttachment(publicId, attachment.id);
       onDeleted(attachment.id);
     } catch (e: any) {
-      alert(e?.message ?? "Failed to delete attachment.");
+      toast.error(e?.message ?? "Failed to delete attachment.");
       setDeleting(false);
     }
   }
@@ -271,6 +273,7 @@ function AttachmentRow({
 
 export function AttachmentsCard({ publicId }: { publicId: string }) {
   const { user, isSuperAdmin } = useAuth();
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [attachments, setAttachments]     = useState<AttachmentDto[]>([]);
@@ -321,7 +324,7 @@ export function AttachmentsCard({ publicId }: { publicId: string }) {
       setLightboxName(attachment.fileName);
       setLightboxUrl(url);
     } catch (e: any) {
-      alert(e?.message ?? "Failed to load image.");
+      toast.error(e?.message ?? "Failed to load image.");
     } finally {
       setPreviewing(null);
     }

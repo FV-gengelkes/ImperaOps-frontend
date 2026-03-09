@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   Activity, MessageSquare, Send, Trash2,
   Plus, ArrowRight, Tag, User, Paperclip, CheckSquare, CheckCircle2, XSquare,
+  Search, UserPlus, Camera, FileText,
   type LucideIcon,
 } from "lucide-react";
 import { createComment, deleteAuditEvent, getAuditLog, getClientUsers } from "@/lib/api";
 import { useAuth } from "@/components/auth-context";
 import { useClientId } from "@/components/client-id-context";
+import { useToast } from "@/components/toast-context";
 import type { AuditEventDto, ClientUserDto } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,6 +56,8 @@ function renderBody(body: string) {
 const ACTIVITY_TYPES = new Set([
   "created", "type_changed", "status_changed", "owner_changed",
   "attachment_added", "attachment_removed", "task_added", "task_completed", "task_removed",
+  "investigation_started", "investigation_updated", "investigation_completed",
+  "witness_added", "evidence_added",
 ]);
 
 // ── Timeline config ───────────────────────────────────────────────────────────
@@ -70,6 +74,11 @@ const TIMELINE_MAP: Record<string, TimelineConfig> = {
   task_added:        { icon: CheckSquare,    dotColor: "bg-brand/10 border-brand/30",       iconColor: "text-brand"     },
   task_completed:    { icon: CheckCircle2,   dotColor: "bg-success/10 border-success/30",   iconColor: "text-success"   },
   task_removed:      { icon: XSquare,        dotColor: "bg-slate-100 border-slate-300",     iconColor: "text-slate-400" },
+  investigation_started:   { icon: Search,       dotColor: "bg-purple-100 border-purple-300",   iconColor: "text-purple-600" },
+  investigation_updated:   { icon: ArrowRight,   dotColor: "bg-purple-100 border-purple-300",   iconColor: "text-purple-600" },
+  investigation_completed: { icon: CheckCircle2, dotColor: "bg-success/10 border-success/30",   iconColor: "text-success"    },
+  witness_added:           { icon: UserPlus,     dotColor: "bg-orange-100 border-orange-300",   iconColor: "text-orange-500" },
+  evidence_added:          { icon: Camera,       dotColor: "bg-teal/10 border-teal/30",         iconColor: "text-teal"       },
 };
 
 const DEFAULT_TIMELINE: TimelineConfig = { icon: Activity, dotColor: "bg-slate-100 border-slate-300", iconColor: "text-slate-400" };
@@ -187,6 +196,7 @@ function MentionDropdown({
 export function EventAuditLog({ publicId, view }: { publicId: string; view: "audit" | "comments" }) {
   const { user, isSuperAdmin } = useAuth();
   const { clientId }           = useClientId();
+  const toast                  = useToast();
 
   const [events, setEvents]     = useState<AuditEventDto[]>([]);
   const [users, setUsers]       = useState<ClientUserDto[]>([]);
@@ -290,7 +300,7 @@ export function EventAuditLog({ publicId, view }: { publicId: string; view: "aud
       await deleteAuditEvent(publicId, eventId);
       setEvents(prev => prev.filter(e => e.id !== eventId));
     } catch (e: any) {
-      alert(e?.message ?? "Failed to delete comment.");
+      toast.error(e?.message ?? "Failed to delete comment.");
     }
   }
 

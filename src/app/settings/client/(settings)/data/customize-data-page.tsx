@@ -300,7 +300,7 @@ function initStatusSection(): WorkflowStatusSectionState {
   };
 }
 
-function StatusRow({
+function SortableStatusRow({
   row, isEditing, editForm, editSaving,
   onStartEdit, onFormChange, onSaveEdit, onCancelEdit, onDelete,
 }: {
@@ -314,22 +314,19 @@ function StatusRow({
   onCancelEdit: () => void;
   onDelete: () => void;
 }) {
-  if (row.isSystem) {
-    return (
-      <li className="flex items-center gap-3 px-5 py-3">
-        <Lock size={13} className="text-slate-300 shrink-0 ml-[18px]" />
-        {row.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />}
-        <span className="flex-1 text-sm text-slate-400">{row.name}</span>
-        <span className="text-xs text-slate-400 tabular-nums">{row.count.toLocaleString()} events</span>
-        {row.isClosed && <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Closed</span>}
-      </li>
-    );
-  }
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: row.id });
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   if (isEditing) {
     return (
-      <li className="flex items-center gap-3 px-5 py-3">
-        <span className="ml-[18px]" />
+      <li ref={setNodeRef} style={style} className="flex items-center gap-3 px-5 py-3">
+        <button {...attributes} {...listeners}
+          className="touch-none text-slate-300 hover:text-slate-500 transition-colors cursor-grab active:cursor-grabbing shrink-0"
+          tabIndex={-1} aria-label="Drag to reorder">
+          <GripVertical size={14} />
+        </button>
         <input type="color" value={editForm.color}
           onChange={e => onFormChange({ color: e.target.value })}
           className="w-7 h-7 rounded cursor-pointer shrink-0 border border-slate-200" title="Color" />
@@ -355,8 +352,20 @@ function StatusRow({
   }
 
   return (
-    <li className="flex items-center gap-3 px-5 py-3">
-      <span className="ml-[18px]" />
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 px-5 py-3 ${isDragging ? "opacity-50 bg-slate-50" : ""}`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="touch-none text-slate-300 hover:text-slate-500 transition-colors cursor-grab active:cursor-grabbing shrink-0"
+        tabIndex={-1}
+        aria-label="Drag to reorder"
+      >
+        <GripVertical size={14} />
+      </button>
       {row.color
         ? <span className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />
         : <span className="w-3 h-3 rounded-full shrink-0 bg-slate-200" />
@@ -379,6 +388,10 @@ function StatusRow({
 
 function WorkflowStatusesSection({ clientId }: { clientId: number }) {
   const [s, setS] = useState<WorkflowStatusSectionState>(initStatusSection);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   function update(patch: Partial<WorkflowStatusSectionState>) {
     setS(prev => ({ ...prev, ...patch }));
@@ -436,6 +449,31 @@ function WorkflowStatusesSection({ clientId }: { clientId: number }) {
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const clientRows = s.rows.filter(r => !r.isSystem);
+    const systemRows = s.rows.filter(r => r.isSystem);
+    const originalRows = s.rows;
+    const oldIdx = clientRows.findIndex(r => r.id === active.id);
+    const newIdx = clientRows.findIndex(r => r.id === over.id);
+    const reordered = arrayMove(clientRows, oldIdx, newIdx);
+    const updated = reordered.map((row, i) => ({ ...row, sortOrder: i + 1 }));
+    update({ rows: [...systemRows, ...updated] });
+    try {
+      await Promise.all(
+        updated
+          .filter(row => { const orig = clientRows.find(r => r.id === row.id); return orig && orig.sortOrder !== row.sortOrder; })
+          .map(row => updateWorkflowStatus(row.id, { clientId, name: row.name, color: row.color, isClosed: row.isClosed, sortOrder: row.sortOrder, isActive: row.isActive })),
+      );
+    } catch {
+      update({ rows: originalRows, error: "Failed to save order." });
+    }
+  }
+
+  const systemRows = s.rows.filter(r => r.isSystem);
+  const clientRows = s.rows.filter(r => !r.isSystem);
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -452,18 +490,31 @@ function WorkflowStatusesSection({ clientId }: { clientId: number }) {
       {s.loading && <div className="px-5 py-8 text-center text-sm text-slate-400">Loading…</div>}
       {!s.loading && (
         <ul className="divide-y divide-slate-100">
-          {s.rows.map(row => (
-            <StatusRow
-              key={row.id} row={row}
-              isEditing={s.editId === row.id}
-              editForm={s.editForm} editSaving={s.editSaving}
-              onStartEdit={() => update({ editId: row.id, editForm: { name: row.name, color: row.color ?? "#6366f1", isClosed: row.isClosed } })}
-              onFormChange={p => update({ editForm: { ...s.editForm, ...p } })}
-              onSaveEdit={() => void handleEdit(row)}
-              onCancelEdit={() => update({ editId: null })}
-              onDelete={() => void handleDelete(row)}
-            />
+          {systemRows.map(row => (
+            <li key={row.id} className="flex items-center gap-3 px-5 py-3">
+              <Lock size={13} className="text-slate-300 shrink-0 ml-[18px]" />
+              {row.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />}
+              <span className="flex-1 text-sm text-slate-400">{row.name}</span>
+              <span className="text-xs text-slate-400 tabular-nums">{row.count.toLocaleString()} events</span>
+              {row.isClosed && <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Closed</span>}
+            </li>
           ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={clientRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
+              {clientRows.map(row => (
+                <SortableStatusRow
+                  key={row.id} row={row}
+                  isEditing={s.editId === row.id}
+                  editForm={s.editForm} editSaving={s.editSaving}
+                  onStartEdit={() => update({ editId: row.id, editForm: { name: row.name, color: row.color ?? "#6366f1", isClosed: row.isClosed } })}
+                  onFormChange={p => update({ editForm: { ...s.editForm, ...p } })}
+                  onSaveEdit={() => void handleEdit(row)}
+                  onCancelEdit={() => update({ editId: null })}
+                  onDelete={() => void handleDelete(row)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
           {s.rows.length === 0 && <li className="px-5 py-6 text-center text-sm text-slate-400">No entries yet.</li>}
         </ul>
       )}

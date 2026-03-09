@@ -149,7 +149,7 @@ export function AdminAuditPage() {
   // Load client list once
   useEffect(() => {
     adminGetClients()
-      .then(list => setClients(list.filter(c => c.isActive)))
+      .then(list => setClients(list.filter(c => c.status !== "Inactive")))
       .catch(() => {});
   }, []);
 
