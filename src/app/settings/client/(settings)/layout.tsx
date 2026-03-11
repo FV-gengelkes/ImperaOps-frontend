@@ -4,6 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { settingsSections } from "../settings-nav";
+import type { MinRole } from "../settings-nav";
+import { useAuth } from "@/components/auth-context";
+import { useClientId } from "@/components/client-id-context";
+import { isAdmin, isManagerOrAbove } from "@/lib/role-helpers";
+
+function meetsMinRole(isSuperAdmin: boolean, role: string | undefined, minRole: MinRole): boolean {
+  if (minRole === "Admin") return isAdmin(isSuperAdmin, role);
+  return isManagerOrAbove(isSuperAdmin, role);
+}
 
 export default function SettingsSubLayout({
   children,
@@ -11,6 +20,16 @@ export default function SettingsSubLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { clients, isSuperAdmin } = useAuth();
+  const { clientId } = useClientId();
+  const role = clients.find(c => c.id === clientId)?.role;
+
+  const visibleSections = settingsSections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => meetsMinRole(isSuperAdmin, role, item.minRole)),
+    }))
+    .filter(section => section.items.length > 0);
 
   return (
     <div className="flex h-full min-h-screen">
@@ -27,7 +46,7 @@ export default function SettingsSubLayout({
         </div>
 
         <nav className="flex-1 space-y-6 px-3">
-          {settingsSections.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.section}>
               <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 {section.section}

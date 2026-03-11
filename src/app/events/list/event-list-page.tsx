@@ -13,7 +13,10 @@ import {
 import type { EventFilters, BulkUpdateEventRequest, BulkDeleteEventRequest } from "@/lib/api";
 import type { EventListItemDto, EventTypeDto, WorkflowStatusDto, PagedResult, ClientUserDto } from "@/lib/types";
 import { EventListTable } from "./event-list-table";
-import { AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, X, Search, Download, Loader2, Check, Bookmark, BookmarkCheck, Trash2, Clock } from "lucide-react";
+import {
+  AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, X, Search, Download, Loader2,
+  Check, Bookmark, BookmarkCheck, Trash2, Clock, Filter, PanelLeftClose, PanelLeft,
+} from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
 // ── Filter Presets ────────────────────────────────────────────────────────────
@@ -55,12 +58,29 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const selectCls =
-  "px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 " +
+  "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 " +
   "focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition-colors";
 
 const dateCls =
+  "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 " +
+  "focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition-colors";
+
+const bulkSelectCls =
   "px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 " +
   "focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition-colors";
+
+// ── Sidebar Panel Key ────────────────────────────────────────────────────────
+
+const SIDEBAR_KEY = "imperaops.event-filters-open";
+
+function loadSidebarOpen(): boolean {
+  try {
+    const v = localStorage.getItem(SIDEBAR_KEY);
+    return v === null ? true : v === "true";
+  } catch {
+    return true;
+  }
+}
 
 export default function EventListPage() {
   const { clientId } = useClientId();
@@ -72,6 +92,17 @@ export default function EventListPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
+
+  // Sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
+
+  function toggleSidebar() {
+    setSidebarOpen(prev => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_KEY, String(next));
+      return next;
+    });
+  }
 
   // Filters
   const [filterSearch,   setFilterSearch]   = useState<string>("");
@@ -93,6 +124,8 @@ export default function EventListPage() {
     if (searchParams.get("isClosed") === "false") setFilterIsClosed("false");
     if (searchParams.get("dateFrom")) setFilterDateFrom(searchParams.get("dateFrom")!);
     if (searchParams.get("dateTo")) setFilterDateTo(searchParams.get("dateTo")!);
+    if (searchParams.get("eventTypeId")) setFilterType(searchParams.get("eventTypeId")!);
+    if (searchParams.get("statusId")) setFilterStatus(searchParams.get("statusId")!);
   }, [searchParams]);
 
   // Presets
@@ -126,6 +159,8 @@ export default function EventListPage() {
   const rangeEnd   = data ? Math.min(page * pageSize, data.totalCount) : 0;
 
   const hasFilters = !!(debouncedSearch || filterType || filterStatus || filterDateFrom || filterDateTo || filterSlaBreached || filterIsClosed);
+
+  const activeFilterCount = [filterType, filterStatus, filterDateFrom, filterDateTo, filterSlaBreached, filterIsClosed].filter(Boolean).length;
 
   function buildFilters(): EventFilters {
     return {
@@ -343,60 +378,39 @@ export default function EventListPage() {
   const currentPageIds = data?.items?.map(i => i.publicId) ?? [];
   const allSelected = currentPageIds.length > 0 && currentPageIds.every(id => selectedIds.has(id));
 
-  return (
-    <div>
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-5 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 leading-tight">Events</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {!canQuery
-              ? "Select a client to load events"
-              : data
-              ? `${data.totalCount.toLocaleString()} event${data.totalCount !== 1 ? "s" : ""}${hasFilters ? " (filtered)" : ""}`
-              : loading ? "Loading…" : "—"}
-          </p>
+  // ── Filter panel content (shared between sidebar and drawer) ───────
+  const filterPanelContent = (
+    <div className="space-y-5">
+      {/* Sidebar header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Filter size={14} className="text-slate-400" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Filters
+          </span>
+          {activeFilterCount > 0 && (
+            <span className="flex items-center justify-center h-4 min-w-4 px-1 text-[10px] font-bold bg-brand text-white rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
         </div>
-
-        {canQuery && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleExport}
-              disabled={exporting || !clientId}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-50 transition-colors shadow-sm"
-            >
-              {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-              {exporting ? "Exporting…" : "Export CSV"}
-            </button>
-            <button
-              onClick={() => load(page)}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-          </div>
-        )}
+        <button
+          onClick={toggleSidebar}
+          className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+          title="Hide filters"
+        >
+          <X size={16} className="xl:hidden" />
+          <PanelLeftClose size={16} className="hidden xl:block" />
+        </button>
       </div>
 
-      {/* Search input */}
-      {canQuery && (
-        <div className="relative mb-2.5">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="search"
-            placeholder="Search by title, location, description, or type…"
-            value={filterSearch}
-            onChange={e => setFilterSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition"
-          />
-        </div>
-      )}
-
-      {/* Filter bar */}
-      {canQuery && (
-        <div className="flex flex-wrap items-center gap-2.5 mb-5 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+      {/* Filter controls */}
+      <div className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
+        {/* Event Type */}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+            Event Type
+          </label>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
@@ -407,7 +421,13 @@ export default function EventListPage() {
               <option key={t.id} value={String(t.id)}>{t.name}</option>
             ))}
           </select>
+        </div>
 
+        {/* Status */}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+            Status
+          </label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -418,30 +438,56 @@ export default function EventListPage() {
               <option key={s.id} value={String(s.id)}>{s.name}</option>
             ))}
           </select>
+        </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-400 font-medium">From</span>
-            <input
-              type="date"
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className={dateCls}
-            />
+        {/* Open / Closed */}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+            Open / Closed
+          </label>
+          <select
+            value={filterIsClosed}
+            onChange={(e) => setFilterIsClosed(e.target.value)}
+            className={`${selectCls} ${filterIsClosed ? "ring-2 ring-brand/30 border-brand" : ""}`}
+          >
+            <option value="">All</option>
+            <option value="false">Open Only</option>
+            <option value="true">Closed Only</option>
+          </select>
+        </div>
+
+        {/* Date Range */}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+            Date Range
+          </label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 w-8 shrink-0">From</span>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className={dateCls}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 w-8 shrink-0">To</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className={dateCls}
+              />
+            </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-400 font-medium">To</span>
-            <input
-              type="date"
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              className={dateCls}
-            />
-          </div>
-
+        {/* SLA Toggle */}
+        <div>
           <button
             onClick={() => setFilterSlaBreached(v => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+            className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
               filterSlaBreached
                 ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
                 : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
@@ -450,231 +496,347 @@ export default function EventListPage() {
             <Clock size={13} />
             Past SLA
           </button>
+        </div>
 
-          <select
-            value={filterIsClosed}
-            onChange={(e) => setFilterIsClosed(e.target.value)}
-            className={`${selectCls} ${filterIsClosed ? "ring-2 ring-brand/30 border-brand" : ""}`}
+        {/* Clear button */}
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
           >
-            <option value="">Open / Closed</option>
-            <option value="false">Open Only</option>
-            <option value="true">Closed Only</option>
-          </select>
+            <X size={13} />
+            Clear All Filters
+          </button>
+        )}
+      </div>
 
-          {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              <X size={13} />
-              Clear
-            </button>
-          )}
-
-          {/* Save preset */}
+      {/* ── Saved Presets ──────────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            Saved Presets
+          </span>
           {hasFilters && !savingPreset && (
             <button
               onClick={() => { setSavingPreset(true); setTimeout(() => presetInputRef.current?.focus(), 0); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand hover:text-brand-hover bg-brand/5 hover:bg-brand/10 rounded-lg transition-colors ml-auto"
+              className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-hover transition-colors"
             >
-              <Bookmark size={13} />
+              <Bookmark size={11} />
               Save
             </button>
           )}
+        </div>
 
-          {savingPreset && (
-            <div className="flex items-center gap-1.5 ml-auto">
-              <input
-                ref={presetInputRef}
-                type="text"
-                placeholder="Preset name…"
-                value={presetName}
-                onChange={e => setPresetName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") confirmSavePreset(); if (e.key === "Escape") { setSavingPreset(false); setPresetName(""); } }}
-                className="px-3 py-2 text-sm border border-brand/40 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40 w-40"
-              />
+        {/* Save preset input */}
+        {savingPreset && (
+          <div className="mb-3 space-y-2">
+            <input
+              ref={presetInputRef}
+              type="text"
+              placeholder="Preset name..."
+              value={presetName}
+              onChange={e => setPresetName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") confirmSavePreset(); if (e.key === "Escape") { setSavingPreset(false); setPresetName(""); } }}
+              className="w-full px-3 py-2 text-sm border border-brand/40 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40"
+            />
+            <div className="flex gap-1.5">
               <button
                 onClick={confirmSavePreset}
                 disabled={!presetName.trim()}
-                className="flex items-center gap-1 px-3 py-2 text-sm font-medium bg-brand text-brand-text rounded-lg hover:bg-brand-hover disabled:opacity-40 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand-hover disabled:opacity-40 transition-colors"
               >
-                <BookmarkCheck size={13} />
-                Confirm
+                <BookmarkCheck size={11} />
+                Save
               </button>
               <button
                 onClick={() => { setSavingPreset(false); setPresetName(""); }}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
               >
-                <X size={13} />
+                Cancel
               </button>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Preset chips */}
-      {canQuery && presets.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 -mt-3">
-          {presets.map(p => (
-            <div key={p.id} className="flex items-center gap-1 pl-3 pr-1 py-1 bg-brand/10 text-brand rounded-full text-xs font-medium">
-              <button onClick={() => applyPreset(p)} className="hover:text-brand-hover transition-colors">
-                {p.name}
-              </button>
-              <button
-                onClick={() => deletePreset(p.id)}
-                className="ml-0.5 p-0.5 rounded-full hover:bg-brand/20 text-brand/60 hover:text-brand transition-colors"
-                title="Remove preset"
-              >
-                <X size={10} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-brand/5 border border-brand/20 rounded-xl shadow-sm">
-          <span className="text-sm font-semibold text-brand-link">
-            {selectedIds.size} selected
-          </span>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-brand-link opacity-70 hover:opacity-100 underline transition-opacity"
-          >
-            Clear
-          </button>
-
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            {isManagerOrAbove && (
-              <>
-                <select
-                  value={bulkStatus}
-                  onChange={e => setBulkStatus(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="">Set status…</option>
-                  {statusOptions.map(s => (
-                    <option key={s.id} value={String(s.id)}>{s.name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={bulkOwner}
-                  onChange={e => setBulkOwner(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="">Assign owner…</option>
-                  <option value="CLEAR">— Unassign —</option>
-                  {users.map(u => (
-                    <option key={u.id} value={String(u.id)}>{u.displayName}</option>
-                  ))}
-                </select>
-
+        {presets.length === 0 && !savingPreset ? (
+          <p className="text-xs text-slate-400">No saved presets yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {presets.map(p => (
+              <div key={p.id} className="group flex items-center gap-1.5">
                 <button
-                  onClick={handleBulkApply}
-                  disabled={bulkLoading || (!bulkStatus && !bulkOwner)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-brand text-brand-text rounded-lg hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => applyPreset(p)}
+                  className="flex-1 text-left text-sm text-slate-600 hover:text-brand truncate py-1 transition-colors"
                 >
-                  {bulkLoading
-                    ? <Loader2 size={14} className="animate-spin" />
-                    : <Check size={14} />}
-                  Apply to {selectedIds.size}
+                  {p.name}
                 </button>
-              </>
-            )}
-
-            {isAdmin && (
-              <button
-                onClick={() => setShowBulkDeleteConfirm(true)}
-                disabled={bulkDeleteLoading || bulkLoading}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {bulkDeleteLoading
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <Trash2 size={14} />}
-                Delete ({selectedIds.size})
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* No client state */}
-      {!canQuery && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
-          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle size={26} className="text-slate-400" />
-          </div>
-          <p className="font-semibold text-slate-700">No client selected</p>
-          <p className="text-sm text-slate-400 mt-1">Select a client to load events.</p>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-5 flex gap-3">
-          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-red-700 text-sm">Failed to load events</p>
-            <p className="text-sm text-red-600 mt-0.5">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Table card */}
-      {canQuery && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <EventListTable
-            items={data?.items ?? []}
-            loading={loading}
-            selectedIds={selectedIds}
-            onToggle={toggleRow}
-            onToggleAll={toggleAll}
-            allSelected={allSelected}
-          />
-
-          {/* Pagination */}
-          {data && data.totalCount > 0 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-              <p className="text-sm text-slate-500">
-                {rangeStart}–{rangeEnd} of {data.totalCount.toLocaleString()}
-              </p>
-              <div className="flex items-center gap-1.5">
                 <button
-                  disabled={page <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => deletePreset(p.id)}
+                  className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Remove preset"
                 >
-                  <ChevronLeft size={15} />
-                  Prev
-                </button>
-                <span className="text-sm text-slate-500 px-2 tabular-nums">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  disabled={loading || page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                  <ChevronRight size={15} />
+                  <X size={12} />
                 </button>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex gap-6">
+      {/* ── Filter Sidebar (xl+): sticky inline panel ───────────────── */}
+      {canQuery && sidebarOpen && (
+        <aside className="hidden xl:block w-60 shrink-0">
+          <div className="sticky top-8">
+            {filterPanelContent}
+          </div>
+        </aside>
+      )}
+
+      {/* ── Filter Drawer (<xl): slide-over overlay ─────────────────── */}
+      {canQuery && sidebarOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="xl:hidden fixed inset-0 bg-black/30 z-40"
+            onClick={toggleSidebar}
+          />
+          {/* Drawer */}
+          <div className="xl:hidden fixed inset-y-0 left-0 z-50 w-72 bg-surface shadow-2xl overflow-y-auto p-5">
+            {filterPanelContent}
+          </div>
+        </>
+      )}
+
+      {/* ── Main Content ─────────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0">
+        {/* Page header */}
+        <div className="flex items-start justify-between mb-5 gap-4">
+          <div className="flex items-center gap-3">
+            {canQuery && !sidebarOpen && (
+              <button
+                onClick={toggleSidebar}
+                className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Show filters"
+              >
+                <Filter size={18} />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center h-4 min-w-4 px-1 text-[10px] font-bold bg-brand text-white rounded-full">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            )}
+            {/* Show toggle even when sidebar is open on small screens */}
+            {canQuery && sidebarOpen && (
+              <button
+                onClick={toggleSidebar}
+                className="xl:hidden relative p-2 text-brand hover:text-brand-hover hover:bg-brand/10 rounded-lg transition-colors"
+                title="Show filters"
+              >
+                <Filter size={18} />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center h-4 min-w-4 px-1 text-[10px] font-bold bg-brand text-white rounded-full">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 leading-tight">Events</h1>
+              <p className="text-sm text-slate-500 mt-1">
+                {!canQuery
+                  ? "Select a client to load events"
+                  : data
+                  ? `${data.totalCount.toLocaleString()} event${data.totalCount !== 1 ? "s" : ""}${hasFilters ? " (filtered)" : ""}`
+                  : loading ? "Loading..." : "\u2014"}
+              </p>
+            </div>
+          </div>
+
+          {canQuery && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleExport}
+                disabled={exporting || !clientId}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                {exporting ? "Exporting..." : "Export CSV"}
+              </button>
+              <button
+                onClick={() => load(page)}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                Refresh
+              </button>
             </div>
           )}
         </div>
-      )}
 
-      <ConfirmDialog
-        open={showBulkDeleteConfirm}
-        onClose={() => setShowBulkDeleteConfirm(false)}
-        onConfirm={handleBulkDelete}
-        title="Delete Events"
-        description={`Permanently delete ${selectedIds.size} event${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`}
-        confirmLabel="Delete"
-        variant="danger"
-      />
+        {/* Search input */}
+        {canQuery && (
+          <div className="relative mb-4">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="search"
+              placeholder="Search by title, location, description, or type..."
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition"
+            />
+          </div>
+        )}
+
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-brand/5 border border-brand/20 rounded-xl shadow-sm">
+            <span className="text-sm font-semibold text-brand-link">
+              {selectedIds.size} selected
+            </span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-brand-link opacity-70 hover:opacity-100 underline transition-opacity"
+            >
+              Clear
+            </button>
+
+            <div className="flex items-center gap-2 ml-auto flex-wrap">
+              {isManagerOrAbove && (
+                <>
+                  <select
+                    value={bulkStatus}
+                    onChange={e => setBulkStatus(e.target.value)}
+                    className={bulkSelectCls}
+                  >
+                    <option value="">Set status...</option>
+                    {statusOptions.map(s => (
+                      <option key={s.id} value={String(s.id)}>{s.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={bulkOwner}
+                    onChange={e => setBulkOwner(e.target.value)}
+                    className={bulkSelectCls}
+                  >
+                    <option value="">Assign owner...</option>
+                    <option value="CLEAR">&mdash; Unassign &mdash;</option>
+                    {users.map(u => (
+                      <option key={u.id} value={String(u.id)}>{u.displayName}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={handleBulkApply}
+                    disabled={bulkLoading || (!bulkStatus && !bulkOwner)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-brand text-brand-text rounded-lg hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {bulkLoading
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <Check size={14} />}
+                    Apply to {selectedIds.size}
+                  </button>
+                </>
+              )}
+
+              {isAdmin && (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  disabled={bulkDeleteLoading || bulkLoading}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {bulkDeleteLoading
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <Trash2 size={14} />}
+                  Delete ({selectedIds.size})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* No client state */}
+        {!canQuery && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
+            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={26} className="text-slate-400" />
+            </div>
+            <p className="font-semibold text-slate-700">No client selected</p>
+            <p className="text-sm text-slate-400 mt-1">Select a client to load events.</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-5 flex gap-3">
+            <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-700 text-sm">Failed to load events</p>
+              <p className="text-sm text-red-600 mt-0.5">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Table card */}
+        {canQuery && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <EventListTable
+              items={data?.items ?? []}
+              loading={loading}
+              selectedIds={selectedIds}
+              onToggle={toggleRow}
+              onToggleAll={toggleAll}
+              allSelected={allSelected}
+            />
+
+            {/* Pagination */}
+            {data && data.totalCount > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-sm text-slate-500">
+                  {rangeStart}&ndash;{rangeEnd} of {data.totalCount.toLocaleString()}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft size={15} />
+                    Prev
+                  </button>
+                  <span className="text-sm text-slate-500 px-2 tabular-nums">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    disabled={loading || page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={showBulkDeleteConfirm}
+          onClose={() => setShowBulkDeleteConfirm(false)}
+          onConfirm={handleBulkDelete}
+          title="Delete Events"
+          description={`Permanently delete ${selectedIds.size} event${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
+      </div>
     </div>
   );
 }

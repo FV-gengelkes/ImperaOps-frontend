@@ -409,7 +409,7 @@ export default function EventDetailsPage() {
         rootCauseId,
         correctiveAction,
       };
-      await updateEvent(publicId, upd);
+      await updateEvent(publicId, upd, eventClientId || clientId);
       await customFieldsRef.current?.save();
       setSubmitted(false);
       toast.success("Event saved");
@@ -432,7 +432,7 @@ export default function EventDetailsPage() {
   async function handleClone() {
     setCloning(true);
     try {
-      const res = await cloneEvent(publicId);
+      const res = await cloneEvent(publicId, eventClientId || clientId);
       toast.success("Event duplicated");
       router.push(`/events/${res.publicId}/details`);
     } catch (e: any) {
@@ -445,7 +445,7 @@ export default function EventDetailsPage() {
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteEvent(publicId);
+      await deleteEvent(publicId, eventClientId || clientId);
       router.push("/events/list");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete event.");
@@ -454,7 +454,7 @@ export default function EventDetailsPage() {
   }
 
   return (
-    <div className={isNew ? "" : "pb-24 sm:pb-20"}>
+    <div className={`max-w-7xl mx-auto ${isNew ? "" : "pb-24 sm:pb-20"}`}>
       {/* Header */}
       <div className="mb-6">
         <Link

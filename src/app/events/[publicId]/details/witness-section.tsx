@@ -8,11 +8,13 @@ import type { WitnessDto } from "@/lib/types";
 
 export function WitnessSection({
   publicId,
+  clientId,
   witnesses,
   setWitnesses,
   isManager,
 }: {
   publicId: string;
+  clientId?: number;
   witnesses: WitnessDto[];
   setWitnesses: React.Dispatch<React.SetStateAction<WitnessDto[]>>;
   isManager: boolean;
@@ -27,10 +29,10 @@ export function WitnessSection({
   async function handleAddWitness() {
     if (!wName.trim() || !wStatement.trim()) return;
     try {
-      await addWitness(publicId, { witnessName: wName.trim(), witnessContact: wContact.trim() || null, statement: wStatement });
+      await addWitness(publicId, { witnessName: wName.trim(), witnessContact: wContact.trim() || null, statement: wStatement }, clientId);
       setWName(""); setWContact(""); setWStatement("");
       setShowAddWitness(false);
-      const w = await getWitnesses(publicId);
+      const w = await getWitnesses(publicId, clientId);
       setWitnesses(w);
       toast.success("Witness added");
     } catch (e: any) {
@@ -40,7 +42,7 @@ export function WitnessSection({
 
   async function handleDeleteWitness(id: number) {
     try {
-      await deleteWitness(publicId, id);
+      await deleteWitness(publicId, id, clientId);
       setWitnesses(prev => prev.filter(w => w.id !== id));
       toast.success("Witness removed");
     } catch (e: any) {

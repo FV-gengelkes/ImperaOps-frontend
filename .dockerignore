@@ -1,0 +1,9 @@
+.next/
+out/
+node_modules/
+.env.local
+.vscode/
+.idea/
+Dockerfile
+.dockerignore
+.gitignore

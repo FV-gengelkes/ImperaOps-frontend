@@ -99,7 +99,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
   async function load() {
     setLoading(true);
     try {
-      const data = await getInvestigation(publicId);
+      const data = await getInvestigation(publicId, clientId || undefined);
       setInv(data);
       if (data) {
         setSummary(data.summary ?? "");
@@ -108,7 +108,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
         setSavedSummary(data.summary ?? "");
         setSavedRca(data.rootCauseAnalysis ?? "");
         setSavedCorrective(data.correctiveActions ?? "");
-        const [w, e] = await Promise.all([getWitnesses(publicId), getEvidence(publicId)]);
+        const [w, e] = await Promise.all([getWitnesses(publicId, clientId || undefined), getEvidence(publicId, clientId || undefined)]);
         setWitnesses(w);
         setEvidenceList(e);
       }
@@ -131,7 +131,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
   async function handleStart() {
     setStarting(true);
     try {
-      await startInvestigation(publicId, Number(user?.id) || null);
+      await startInvestigation(publicId, Number(user?.id) || null, clientId || undefined);
       toast.success("Investigation started");
       await load();
     } catch (e: any) {
@@ -143,11 +143,12 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
   async function handleSave() {
     setSaving(true);
     try {
-      await updateInvestigation(publicId, { summary, rootCauseAnalysis: rca, correctiveActions: corrective });
+      await updateInvestigation(publicId, { summary, rootCauseAnalysis: rca, correctiveActions: corrective }, clientId || undefined);
       setSavedSummary(summary);
       setSavedRca(rca);
       setSavedCorrective(corrective);
       toast.success("Investigation saved");
+      await load();
     } catch (e: any) {
       toast.error(e?.message ?? "Save failed");
     }
@@ -156,7 +157,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
 
   async function handleTransition(newStatus: string) {
     try {
-      await updateInvestigation(publicId, { status: newStatus, summary, rootCauseAnalysis: rca, correctiveActions: corrective });
+      await updateInvestigation(publicId, { status: newStatus, summary, rootCauseAnalysis: rca, correctiveActions: corrective }, clientId || undefined);
       toast.success(`Status changed to ${newStatus.replace("_", " ")}`);
       await load();
     } catch (e: any) {
@@ -227,6 +228,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
       {/* Witnesses */}
       <WitnessSection
         publicId={publicId}
+        clientId={clientId || undefined}
         witnesses={witnesses}
         setWitnesses={setWitnesses}
         isManager={isManager}
@@ -235,6 +237,7 @@ export function InvestigationCard({ publicId, onDirtyChange }: { publicId: strin
       {/* Evidence */}
       <EvidenceSection
         publicId={publicId}
+        clientId={clientId || undefined}
         evidence={evidence}
         setEvidence={setEvidenceList}
         isManager={isManager}

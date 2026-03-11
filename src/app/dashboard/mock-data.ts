@@ -19,11 +19,11 @@ export const monthlyData: MonthlyDataPoint[] = [
 ];
 
 export const typeData = [
-  { name: "Near Miss",        value: 158, color: "#f59e0b" },
-  { name: "Accident",         value: 114, color: "#ef4444" },
-  { name: "Property Damage",  value: 76,  color: "#8b5cf6" },
-  { name: "Injury",           value: 48,  color: "#f97316" },
-  { name: "Safety Violation", value: 46,  color: "#6366f1" },
+  { name: "Near Miss",        value: 158, color: "#f59e0b", id: undefined as number | undefined },
+  { name: "Accident",         value: 114, color: "#ef4444", id: undefined as number | undefined },
+  { name: "Property Damage",  value: 76,  color: "#8b5cf6", id: undefined as number | undefined },
+  { name: "Injury",           value: 48,  color: "#f97316", id: undefined as number | undefined },
+  { name: "Safety Violation", value: 46,  color: "#6366f1", id: undefined as number | undefined },
 ];
 
 export const statusData = [

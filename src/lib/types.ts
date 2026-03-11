@@ -601,3 +601,110 @@ export type AiInvestigateResponse = {
 export type AiTrendAnalysisResponse = {
   summary: string;
 };
+
+// ── Workflow Rules ───────────────────────────────────────────────────────────
+
+export type WorkflowRuleDto = {
+  id: number;
+  clientId: number;
+  name: string;
+  description: string | null;
+  triggerType: string;
+  isActive: boolean;
+  sortOrder: number;
+  stopOnMatch: boolean;
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
+  createdByUserId: number | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  executionCount: number;
+  failedExecutionCount: number;
+};
+
+export type WorkflowCondition = {
+  field: string;
+  operator: string;
+  value?: string | null;
+};
+
+export type WorkflowAction = {
+  type: string;
+  config: WorkflowActionConfig;
+};
+
+export type WorkflowActionConfig = {
+  userId?: number | null;
+  workflowStatusId?: number | null;
+  taskTitle?: string | null;
+  taskDescription?: string | null;
+  taskAssignedToUserId?: number | null;
+  taskDueDaysFromNow?: number | null;
+  notifyUserIds?: number[] | null;
+  notifyRoles?: string[] | null;
+  notificationMessage?: string | null;
+  commentBody?: string | null;
+  rootCauseId?: number | null;
+};
+
+export type WorkflowRuleExecutionDto = {
+  id: number;
+  workflowRuleId: number;
+  workflowRuleName: string | null;
+  eventId: number;
+  eventPublicId: string | null;
+  triggerType: string;
+  actionsExecuted: number;
+  success: boolean;
+  errorMessage: string | null;
+  executedAt: string;
+};
+
+// ── API Credentials ──────────────────────────────────────────────────────────
+
+export type ApiCredentialDto = {
+  id: number;
+  clientId: number;
+  clientSid: string;
+  name: string;
+  keyId: string;
+  secretLast4: string;
+  scopes: string[];
+  status: string;
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+};
+
+export type CreateApiCredentialRequest = {
+  name: string;
+  scopes: string[];
+  expiresAt?: string | null;
+};
+
+export type ApiCredentialCreatedDto = {
+  id: number;
+  clientSid: string;
+  keyId: string;
+  secret: string;
+  name: string;
+  scopes: string[];
+  authorizationHeader: string;
+};
+
+export type UpdateApiCredentialRequest = {
+  name: string;
+  scopes: string[];
+  isActive: boolean;
+  expiresAt?: string | null;
+};
+
+export type ApiCredentialAuditLogDto = {
+  id: number;
+  action: string;
+  performedByUserId: number | null;
+  detailsJson: string | null;
+  createdAt: string;
+};

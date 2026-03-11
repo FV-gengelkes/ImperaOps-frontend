@@ -10,6 +10,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { TrendingDown, TrendingUp, Activity, Loader2, Building2, CheckSquare2, Square, Calendar, Lightbulb, AlertTriangle as AlertTriangleIcon, AlertCircle, Info, Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useClientId } from "@/components/client-id-context";
 import { adminGetClients, getEventAnalytics, getInsightSummary } from "@/lib/api";
 import type { ClientAccessDto, EventAnalyticsDto, InsightSummaryDto } from "@/lib/types";
@@ -224,6 +225,7 @@ export default function DashboardPage() {
   const { clientId }              = useClientId();
   const { clients, isSuperAdmin } = useAuth();
   const { theme }                 = useTheme();
+  const router                    = useRouter();
   const [analytics, setAnalytics] = useState<EventAnalyticsDto | null>(null);
   const [fetching, setFetching]   = useState(false);
   const [fetchErr, setFetchErr]   = useState("");
@@ -307,12 +309,25 @@ export default function DashboardPage() {
     ? Math.round(monthly.reduce((s, d) => s + d.total, 0) / monthly.length)
     : 0;
 
+  // Merge duplicate names (e.g. same event type across clients) by summing counts
+  function mergeByName<T extends Record<string, any>>(items: T[], nameKey: keyof T, idKey?: keyof T) {
+    const map = new Map<string, { count: number; id?: number }>();
+    for (const item of items) {
+      const name = String(item[nameKey]);
+      const existing = map.get(name);
+      if (existing) {
+        existing.count += item.count;
+      } else {
+        map.set(name, { count: item.count, id: idKey ? item[idKey] : undefined });
+      }
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, { count, id }], i) => ({ name, value: count, color: CHART_PALETTE[i % CHART_PALETTE.length], id }));
+  }
+
   const chartTypeData = isLive
-    ? analytics!.byType.map((t, i) => ({
-        name: t.eventTypeName,
-        value: t.count,
-        color: CHART_PALETTE[i % CHART_PALETTE.length],
-      }))
+    ? mergeByName(analytics!.byType, "eventTypeName", "eventTypeId")
     : mockType;
 
   const chartStatusData = isLive
@@ -323,7 +338,7 @@ export default function DashboardPage() {
     : mockStatus;
 
   const chartLocationData = isLive
-    ? analytics!.topLocations.slice(0, 8)
+    ? mergeByName(analytics!.topLocations, "location").slice(0, 8).map(d => ({ location: d.name, count: d.value }))
     : mockLocation;
 
   const thisMonthTrend = isLive && analytics!.lastMonth !== 0
@@ -518,7 +533,20 @@ export default function DashboardPage() {
         >
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthly} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+              <AreaChart data={monthly} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} className="cursor-pointer"
+                onClick={(state: any) => {
+                  if (!state?.activePayload?.length) return;
+                  const pt = state.activePayload[0]?.payload;
+                  if (!pt?.month) return;
+                  const parts = pt.month.split(" '");
+                  const mi = MONTH_NAMES.indexOf(parts[0]);
+                  const yr = parts[1] ? 2000 + parseInt(parts[1]) : undefined;
+                  if (mi < 0 || !yr || isNaN(yr)) return;
+                  const from = `${yr}-${String(mi + 1).padStart(2, "0")}-01`;
+                  const last = new Date(yr, mi + 1, 0);
+                  const to = `${yr}-${String(mi + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+                  router.push(`/events/list?dateFrom=${from}&dateTo=${to}`);
+                }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
@@ -538,7 +566,14 @@ export default function DashboardPage() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={chartTypeData} cx="50%" cy="50%" innerRadius={58} outerRadius={88}
-                  paddingAngle={3} dataKey="value" strokeWidth={0}>
+                  paddingAngle={3} dataKey="value" strokeWidth={0} className="cursor-pointer"
+                  onClick={(data: any) => {
+                    if (!data?.name) return;
+                    const d = chartTypeData.find(t => t.name === data.name);
+                    if (!d) return;
+                    if (d.id) router.push(`/events/list?eventTypeId=${d.id}`);
+                    else router.push(`/events/list?search=${encodeURIComponent(d.name)}`);
+                  }}>
                   {chartTypeData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
                 <Tooltip content={<DarkTooltip />} />
@@ -552,8 +587,13 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="space-y-2">
-            {chartTypeData.map((d) => (
-              <div key={d.name} className="flex items-center gap-2 text-xs">
+            {chartTypeData.map((d, i) => (
+              <div key={i}
+                onClick={() => {
+                  if (d.id) router.push(`/events/list?eventTypeId=${d.id}`);
+                  else router.push(`/events/list?search=${encodeURIComponent(d.name)}`);
+                }}
+                className="flex items-center gap-2 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-midnight/50 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors">
                 <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
                 <span className="text-slate-600 dark:text-slate-400 flex-1">{d.name}</span>
                 <span className="font-semibold text-slate-800 dark:text-steel-white tabular-nums">{d.value}</span>
@@ -596,15 +636,22 @@ export default function DashboardPage() {
                 <XAxis type="number" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
                 <Tooltip content={<DarkTooltip />} />
-                <Bar dataKey="value" name="Events" radius={[0, 5, 5, 0]}>
+                <Bar dataKey="value" name="Events" radius={[0, 5, 5, 0]} className="cursor-pointer"
+                  onClick={(data: any) => {
+                    if (!data?.name) return;
+                    router.push(`/events/list?isClosed=${data.name === "Closed" ? "true" : "false"}`);
+                  }}>
                   {chartStatusData.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {chartStatusData.map((d) => (
-              <div key={d.name} className="rounded-xl p-3 text-center" style={{ background: `${d.color}18` }}>
+            {chartStatusData.map((d, i) => (
+              <div key={i}
+                onClick={() => router.push(`/events/list?isClosed=${d.name === "Closed" ? "true" : "false"}`)}
+                className="rounded-xl p-3 text-center cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ background: `${d.color}18` }}>
                 <p className="text-xl font-extrabold tabular-nums" style={{ color: d.color }}>{d.value}</p>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-semibold leading-tight">{d.name}</p>
               </div>
@@ -620,7 +667,11 @@ export default function DashboardPage() {
                 <XAxis type="number" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="location" width={155} tick={{ fontSize: 10.5, fill: tickFill }} axisLine={false} tickLine={false} />
                 <Tooltip content={<DarkTooltip />} />
-                <Bar dataKey="count" name="Events" fill="#2F80ED" radius={[0, 5, 5, 0]} />
+                <Bar dataKey="count" name="Events" fill="#2F80ED" radius={[0, 5, 5, 0]} className="cursor-pointer"
+                  onClick={(data: any) => {
+                    if (data?.location) router.push(`/events/list?search=${encodeURIComponent(data.location)}`);
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -629,11 +680,7 @@ export default function DashboardPage() {
 
       {/* Root Cause Distribution — only shown when root cause data is available */}
       {isLive && analytics!.byRootCause.length > 0 && (() => {
-        const rcData = analytics!.byRootCause.map((rc, i) => ({
-          name: rc.name,
-          value: rc.count,
-          color: CHART_PALETTE[i % CHART_PALETTE.length],
-        }));
+        const rcData = mergeByName(analytics!.byRootCause, "name");
         const rcTotal = rcData.reduce((s, d) => s + d.value, 0);
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -642,7 +689,10 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={rcData} cx="50%" cy="50%" innerRadius={58} outerRadius={88}
-                      paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      paddingAngle={3} dataKey="value" strokeWidth={0} className="cursor-pointer"
+                      onClick={(data: any) => {
+                        if (data?.name) router.push(`/events/list?search=${encodeURIComponent(data.name)}`);
+                      }}>
                       {rcData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                     <Tooltip content={<DarkTooltip />} />
@@ -656,8 +706,10 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                {rcData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-2 text-xs">
+                {rcData.map((d, i) => (
+                  <div key={i}
+                    onClick={() => router.push(`/events/list?search=${encodeURIComponent(d.name)}`)}
+                    className="flex items-center gap-2 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-midnight/50 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors">
                     <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
                     <span className="text-slate-600 dark:text-slate-400 flex-1">{d.name}</span>
                     <span className="font-semibold text-slate-800 dark:text-steel-white tabular-nums">{d.value}</span>

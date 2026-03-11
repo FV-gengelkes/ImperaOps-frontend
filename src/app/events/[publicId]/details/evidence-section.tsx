@@ -19,11 +19,13 @@ const EVIDENCE_ICONS: Record<string, React.ElementType> = {
 
 export function EvidenceSection({
   publicId,
+  clientId,
   evidence,
   setEvidence,
   isManager,
 }: {
   publicId: string;
+  clientId?: number;
   evidence: EvidenceDto[];
   setEvidence: React.Dispatch<React.SetStateAction<EvidenceDto[]>>;
   isManager: boolean;
@@ -38,10 +40,10 @@ export function EvidenceSection({
   async function handleAddEvidence() {
     if (!eName.trim()) return;
     try {
-      await addEvidence(publicId, { title: eName.trim(), description: eDesc.trim() || null, evidenceType: eType });
+      await addEvidence(publicId, { title: eName.trim(), description: eDesc.trim() || null, evidenceType: eType }, clientId);
       setEName(""); setEDesc(""); setEType("document");
       setShowAddEvidence(false);
-      const e = await getEvidence(publicId);
+      const e = await getEvidence(publicId, clientId);
       setEvidence(e);
       toast.success("Evidence added");
     } catch (e: any) {
@@ -51,7 +53,7 @@ export function EvidenceSection({
 
   async function handleDeleteEvidence(id: number) {
     try {
-      await deleteEvidence(publicId, id);
+      await deleteEvidence(publicId, id, clientId);
       setEvidence(prev => prev.filter(e => e.id !== id));
       toast.success("Evidence removed");
     } catch (e: any) {

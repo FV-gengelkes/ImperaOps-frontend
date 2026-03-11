@@ -3,8 +3,28 @@
 import Link from "next/link";
 import { Settings, ChevronRight } from "lucide-react";
 import { settingsSections } from "./settings-nav";
+import type { MinRole } from "./settings-nav";
+import { useAuth } from "@/components/auth-context";
+import { useClientId } from "@/components/client-id-context";
+import { isAdmin, isManagerOrAbove } from "@/lib/role-helpers";
+
+function meetsMinRole(isSuperAdmin: boolean, role: string | undefined, minRole: MinRole): boolean {
+  if (minRole === "Admin") return isAdmin(isSuperAdmin, role);
+  return isManagerOrAbove(isSuperAdmin, role);
+}
 
 export default function SettingsHubPage() {
+  const { clients, isSuperAdmin } = useAuth();
+  const { clientId } = useClientId();
+  const role = clients.find(c => c.id === clientId)?.role;
+
+  const visibleSections = settingsSections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => meetsMinRole(isSuperAdmin, role, item.minRole)),
+    }))
+    .filter(section => section.items.length > 0);
+
   return (
     <div className="pt-8 sm:pt-10 px-4 sm:px-8 pb-8 max-w-7xl">
       {/* Header */}
@@ -20,7 +40,7 @@ export default function SettingsHubPage() {
 
       {/* Sections */}
       <div className="space-y-8">
-        {settingsSections.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.section}>
             <div className="mb-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">

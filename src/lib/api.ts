@@ -3,9 +3,14 @@ import type {
   AdminClientDto,
   AdminClientUserDto,
   AdminUserDto,
+  WorkflowRuleDto,
+  WorkflowRuleExecutionDto,
   AiCategorizeResponse,
   AiInvestigateResponse,
   AiTrendAnalysisResponse,
+  ApiCredentialAuditLogDto,
+  ApiCredentialCreatedDto,
+  ApiCredentialDto,
   AttachmentDto,
   AuditEventDto,
   AuthResultDto,
@@ -16,6 +21,7 @@ import type {
   ClientInboundEmailDto,
   ClientUserDto,
   ClientWebhookDto,
+  CreateApiCredentialRequest,
   CreateEventRequest,
   CreateEventResponse,
   CustomFieldDto,
@@ -43,6 +49,7 @@ import type {
   RootCauseTaxonomyItemDto,
   SlaRuleDto,
   TaskDto,
+  UpdateApiCredentialRequest,
   UpdateClientInboundEmailRequest,
   UpdateEventRequest,
   UpsertWebhookRequest,
@@ -572,15 +579,17 @@ export async function createEvent(payload: CreateEventRequest): Promise<CreateEv
   });
 }
 
-export async function updateEvent(publicId: string, payload: UpdateEventRequest): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}`, {
+export async function updateEvent(publicId: string, payload: UpdateEventRequest, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}${qs}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function cloneEvent(publicId: string): Promise<{ publicId: string }> {
-  return http<{ publicId: string }>(`/api/v1/events/${publicId}/clone`, { method: "POST" });
+export async function cloneEvent(publicId: string, clientId?: number): Promise<{ publicId: string }> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<{ publicId: string }>(`/api/v1/events/${publicId}/clone${qs}`, { method: "POST" });
 }
 
 export async function bulkUpdateEvents(payload: BulkUpdateEventRequest): Promise<{ updated: number }> {
@@ -590,8 +599,9 @@ export async function bulkUpdateEvents(payload: BulkUpdateEventRequest): Promise
   });
 }
 
-export async function deleteEvent(publicId: string): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}`, { method: "DELETE" });
+export async function deleteEvent(publicId: string, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}${qs}`, { method: "DELETE" });
 }
 
 export async function bulkDeleteEvents(payload: BulkDeleteEventRequest): Promise<{ deleted: number }> {
@@ -767,7 +777,7 @@ export async function adminUploadClientLogo(clientId: number, file: File): Promi
   const token = getStoredToken();
   const form  = new FormData();
   form.append("logo", file);
-  const res = await fetch(`${baseUrl()}/api/v1/admin/clients/${clientId}/logo`, {
+  const res = await fetch(`${baseUrl()}/api/v1/admin/clients/${clientId}/branding/logo`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
@@ -781,7 +791,7 @@ export async function adminUploadClientLogo(clientId: number, file: File): Promi
 }
 
 export async function adminDeleteClientLogo(clientId: number): Promise<void> {
-  return http<void>(`/api/v1/admin/clients/${clientId}/logo`, { method: "DELETE" });
+  return http<void>(`/api/v1/admin/clients/${clientId}/branding/logo`, { method: "DELETE" });
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -1007,12 +1017,14 @@ export async function acknowledgeInsight(id: number): Promise<void> {
 
 // ── Investigations ───────────────────────────────────────────────────
 
-export async function getInvestigation(publicId: string): Promise<InvestigationDto | null> {
-  return http<InvestigationDto | null>(`/api/v1/events/${publicId}/investigation`);
+export async function getInvestigation(publicId: string, clientId?: number): Promise<InvestigationDto | null> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<InvestigationDto | null>(`/api/v1/events/${publicId}/investigation${qs}`);
 }
 
-export async function startInvestigation(publicId: string, leadInvestigatorUserId?: number | null): Promise<{ id: number }> {
-  return http<{ id: number }>(`/api/v1/events/${publicId}/investigation`, {
+export async function startInvestigation(publicId: string, leadInvestigatorUserId?: number | null, clientId?: number): Promise<{ id: number }> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<{ id: number }>(`/api/v1/events/${publicId}/investigation${qs}`, {
     method: "POST",
     body: JSON.stringify({ leadInvestigatorUserId: leadInvestigatorUserId ?? null }),
   });
@@ -1024,21 +1036,24 @@ export async function updateInvestigation(publicId: string, payload: {
   rootCauseAnalysis?: string;
   correctiveActions?: string;
   leadInvestigatorUserId?: number | null;
-}): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}/investigation`, {
+}, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}/investigation${qs}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function getWitnesses(publicId: string): Promise<WitnessDto[]> {
-  return http<WitnessDto[]>(`/api/v1/events/${publicId}/investigation/witnesses`);
+export async function getWitnesses(publicId: string, clientId?: number): Promise<WitnessDto[]> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<WitnessDto[]>(`/api/v1/events/${publicId}/investigation/witnesses${qs}`);
 }
 
 export async function addWitness(publicId: string, payload: {
   witnessName: string; witnessContact?: string | null; statement: string; statementDate?: string | null;
-}): Promise<WitnessDto> {
-  return http<WitnessDto>(`/api/v1/events/${publicId}/investigation/witnesses`, {
+}, clientId?: number): Promise<WitnessDto> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<WitnessDto>(`/api/v1/events/${publicId}/investigation/witnesses${qs}`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -1046,25 +1061,29 @@ export async function addWitness(publicId: string, payload: {
 
 export async function updateWitness(publicId: string, witnessId: number, payload: {
   witnessName: string; witnessContact?: string | null; statement: string; statementDate?: string | null;
-}): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}/investigation/witnesses/${witnessId}`, {
+}, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}/investigation/witnesses/${witnessId}${qs}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function deleteWitness(publicId: string, witnessId: number): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}/investigation/witnesses/${witnessId}`, { method: "DELETE" });
+export async function deleteWitness(publicId: string, witnessId: number, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}/investigation/witnesses/${witnessId}${qs}`, { method: "DELETE" });
 }
 
-export async function getEvidence(publicId: string): Promise<EvidenceDto[]> {
-  return http<EvidenceDto[]>(`/api/v1/events/${publicId}/investigation/evidence`);
+export async function getEvidence(publicId: string, clientId?: number): Promise<EvidenceDto[]> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<EvidenceDto[]>(`/api/v1/events/${publicId}/investigation/evidence${qs}`);
 }
 
 export async function addEvidence(publicId: string, payload: {
   title: string; description?: string | null; evidenceType: string; attachmentId?: number | null; collectedAt?: string | null;
-}): Promise<EvidenceDto> {
-  return http<EvidenceDto>(`/api/v1/events/${publicId}/investigation/evidence`, {
+}, clientId?: number): Promise<EvidenceDto> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<EvidenceDto>(`/api/v1/events/${publicId}/investigation/evidence${qs}`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -1072,15 +1091,17 @@ export async function addEvidence(publicId: string, payload: {
 
 export async function updateEvidence(publicId: string, evidenceId: number, payload: {
   title: string; description?: string | null; evidenceType: string; attachmentId?: number | null; collectedAt?: string | null;
-}): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}/investigation/evidence/${evidenceId}`, {
+}, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}/investigation/evidence/${evidenceId}${qs}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function deleteEvidence(publicId: string, evidenceId: number): Promise<void> {
-  return http<void>(`/api/v1/events/${publicId}/investigation/evidence/${evidenceId}`, { method: "DELETE" });
+export async function deleteEvidence(publicId: string, evidenceId: number, clientId?: number): Promise<void> {
+  const qs = clientId ? `?clientId=${clientId}` : "";
+  return http<void>(`/api/v1/events/${publicId}/investigation/evidence/${evidenceId}${qs}`, { method: "DELETE" });
 }
 
 // ── Client Documents ──────────────────────────────────────────────────
@@ -1190,4 +1211,93 @@ export async function aiAnalyzeTrends(clientId: number): Promise<AiTrendAnalysis
     method: "POST",
     body: JSON.stringify({ clientId }),
   });
+}
+
+// ── Workflow Rules ───────────────────────────────────────────────────────────
+
+export async function getWorkflowRules(clientId: number): Promise<WorkflowRuleDto[]> {
+  return http<WorkflowRuleDto[]>(`/api/v1/clients/${clientId}/workflow-rules`);
+}
+
+export async function getWorkflowRule(clientId: number, id: number): Promise<WorkflowRuleDto> {
+  return http<WorkflowRuleDto>(`/api/v1/clients/${clientId}/workflow-rules/${id}`);
+}
+
+export async function createWorkflowRule(clientId: number, payload: {
+  name: string; description?: string | null; triggerType: string;
+  isActive: boolean; stopOnMatch: boolean;
+  conditions: unknown[]; actions: unknown[];
+}): Promise<WorkflowRuleDto> {
+  return http<WorkflowRuleDto>(`/api/v1/clients/${clientId}/workflow-rules`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateWorkflowRule(clientId: number, id: number, payload: {
+  name: string; description?: string | null; triggerType: string;
+  isActive: boolean; stopOnMatch: boolean;
+  conditions: unknown[]; actions: unknown[];
+}): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/workflow-rules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function toggleWorkflowRule(clientId: number, id: number): Promise<{ isActive: boolean }> {
+  return http<{ isActive: boolean }>(`/api/v1/clients/${clientId}/workflow-rules/${id}/toggle`, {
+    method: "PATCH",
+  });
+}
+
+export async function deleteWorkflowRule(clientId: number, id: number): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/workflow-rules/${id}`, { method: "DELETE" });
+}
+
+export async function reorderWorkflowRules(clientId: number, orderedIds: number[]): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/workflow-rules/reorder`, {
+    method: "PATCH",
+    body: JSON.stringify({ orderedIds }),
+  });
+}
+
+export async function getWorkflowRuleExecutions(clientId: number, page = 1, pageSize = 50): Promise<WorkflowRuleExecutionDto[]> {
+  return http<WorkflowRuleExecutionDto[]>(`/api/v1/clients/${clientId}/workflow-rules/executions?page=${page}&pageSize=${pageSize}`);
+}
+
+// ── API Credentials ──────────────────────────────────────────────────────────
+
+export async function getApiCredentials(clientId: number): Promise<ApiCredentialDto[]> {
+  return http<ApiCredentialDto[]>(`/api/v1/clients/${clientId}/api-credentials`);
+}
+
+export async function createApiCredential(clientId: number, req: CreateApiCredentialRequest): Promise<ApiCredentialCreatedDto> {
+  return http<ApiCredentialCreatedDto>(`/api/v1/clients/${clientId}/api-credentials`, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function updateApiCredential(clientId: number, id: number, req: UpdateApiCredentialRequest): Promise<ApiCredentialDto> {
+  return http<ApiCredentialDto>(`/api/v1/clients/${clientId}/api-credentials/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function revokeApiCredential(clientId: number, id: number): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/api-credentials/${id}/revoke`, {
+    method: "POST",
+  });
+}
+
+export async function deleteApiCredential(clientId: number, id: number): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/api-credentials/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getApiCredentialAudit(clientId: number, id: number): Promise<ApiCredentialAuditLogDto[]> {
+  return http<ApiCredentialAuditLogDto[]>(`/api/v1/clients/${clientId}/api-credentials/${id}/audit`);
 }
