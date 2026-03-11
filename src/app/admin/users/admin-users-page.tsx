@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search,
+  AlertTriangle, CheckCircle2, Loader2, Pencil, RefreshCw, Search,
   Shield, ShieldCheck, ShieldOff, X, XCircle,
 } from "lucide-react";
 import { Modal } from "@/components/modal";
@@ -222,6 +222,81 @@ function GrantSuperAdminModal({
   );
 }
 
+// ── Edit super admin modal ───────────────────────────────────────────────────
+
+function EditSuperAdminModal({
+  user, onClose, onSaved,
+}: {
+  user: AdminUserDto;
+  onClose: () => void;
+  onSaved: (updated: AdminUserDto) => void;
+}) {
+  const toast = useToast();
+  const [email, setEmail]             = useState(user.email);
+  const [displayName, setDisplayName] = useState(user.displayName);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
+
+  const hasChanges = email.trim() !== user.email || displayName.trim() !== user.displayName;
+  const canSubmit  = hasChanges && email.trim() !== "" && displayName.trim() !== "" && !saving;
+
+  async function handleSave() {
+    if (!canSubmit) return;
+    setSaving(true); setError("");
+    try {
+      await adminUpdateUser(user.id, {
+        email: email.trim(),
+        displayName: displayName.trim(),
+        isActive: user.isActive,
+        isSuperAdmin: user.isSuperAdmin,
+      });
+      const updated = { ...user, email: email.trim().toLowerCase(), displayName: displayName.trim() };
+      onSaved(updated);
+      toast.success(`Updated ${updated.displayName}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update.");
+      setSaving(false);
+    }
+  }
+
+  const inputCls =
+    "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white " +
+    "placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent transition";
+
+  return (
+    <Modal open={true} onClose={onClose} title="Edit Super Admin">
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Display Name</label>
+          <input value={displayName} onChange={e => setDisplayName(e.target.value)}
+            className={inputCls} autoFocus />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            className={inputCls} />
+        </div>
+
+        {error && (
+          <div className="px-4 py-2.5 rounded-lg bg-red-950/50 border border-red-800/60 text-sm text-red-300">{error}</div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 px-4 py-2 rounded-lg border border-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-800 transition">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={!canSubmit}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-colors">
+            {saving && <RefreshCw size={14} className="animate-spin" />}
+            {saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export function AdminUsersPage() {
@@ -232,6 +307,7 @@ export function AdminUsersPage() {
   const [grantModal, setGrantModal]   = useState(false);
   const [revoking, setRevoking]       = useState<number | null>(null);
   const [disabling2fa, setDisabling2fa] = useState<number | null>(null);
+  const [editing, setEditing]                 = useState<AdminUserDto | null>(null);
   const [confirmRevoke, setConfirmRevoke]     = useState<AdminUserDto | null>(null);
   const [confirmDisable2fa, setConfirmDisable2fa] = useState<AdminUserDto | null>(null);
 
@@ -378,6 +454,13 @@ export function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditing(user)}
+                          title="Edit user"
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-brand hover:bg-brand/10 transition"
+                        >
+                          <Pencil size={13} />
+                        </button>
                         {user.isTotpEnabled && (
                           <button
                             onClick={() => setConfirmDisable2fa(user)}
@@ -418,6 +501,17 @@ export function AdminUsersPage() {
           )}
         </div>
       </div>
+
+      {editing && (
+        <EditSuperAdminModal
+          user={editing}
+          onClose={() => setEditing(null)}
+          onSaved={updated => {
+            setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+            setEditing(null);
+          }}
+        />
+      )}
 
       {grantModal && (
         <GrantSuperAdminModal
