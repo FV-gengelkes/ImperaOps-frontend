@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, CheckCircle2, Loader2, Pencil, RefreshCw, Search,
-  Shield, ShieldCheck, ShieldOff, X, XCircle,
+  Shield, ShieldCheck, ShieldOff, Trash2, X, XCircle,
 } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
-  adminCreateUser, adminDisableUserTotp, adminGetUsers, adminToggleUserActive, adminUpdateUser,
+  adminCreateUser, adminDeleteUser, adminDisableUserTotp, adminGetUsers, adminToggleUserActive, adminUpdateUser,
 } from "@/lib/api";
 import type { AdminUserDto } from "@/lib/types";
 import { useToast } from "@/components/toast-context";
@@ -308,7 +308,9 @@ export function AdminUsersPage() {
   const [revoking, setRevoking]       = useState<number | null>(null);
   const [disabling2fa, setDisabling2fa] = useState<number | null>(null);
   const [editing, setEditing]                 = useState<AdminUserDto | null>(null);
+  const [deleting, setDeleting]               = useState<number | null>(null);
   const [confirmRevoke, setConfirmRevoke]     = useState<AdminUserDto | null>(null);
+  const [confirmDelete, setConfirmDelete]     = useState<AdminUserDto | null>(null);
   const [confirmDisable2fa, setConfirmDisable2fa] = useState<AdminUserDto | null>(null);
 
   const load = useCallback(async () => {
@@ -362,6 +364,19 @@ export function AdminUsersPage() {
       setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: res.isActive } : u));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to toggle user.");
+    }
+  }
+
+  async function handleDelete(user: AdminUserDto) {
+    setDeleting(user.id);
+    try {
+      await adminDeleteUser(user.id);
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      toast.success(`${user.displayName} has been deleted.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete user.");
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -492,6 +507,17 @@ export function AdminUsersPage() {
                             : <ShieldOff size={13} />
                           }
                         </button>
+                        <button
+                          onClick={() => setConfirmDelete(user)}
+                          disabled={deleting === user.id}
+                          title="Delete user"
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-950/30 transition disabled:opacity-50"
+                        >
+                          {deleting === user.id
+                            ? <RefreshCw size={13} className="animate-spin" />
+                            : <Trash2 size={13} />
+                          }
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -537,6 +563,16 @@ export function AdminUsersPage() {
         title="Revoke Super Admin"
         description={confirmRevoke ? `Remove super admin access from ${confirmRevoke.displayName}? They will remain active and keep any existing client access.` : ""}
         confirmLabel="Revoke"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => { if (confirmDelete) void handleDelete(confirmDelete); }}
+        title="Delete User"
+        description={confirmDelete ? `Permanently delete ${confirmDelete.displayName} (${confirmDelete.email})? This will remove all their access and free up their email address for reuse.` : ""}
+        confirmLabel="Delete"
         variant="danger"
       />
 

@@ -164,6 +164,10 @@ export async function adminDisableUserTotp(userId: number): Promise<void> {
   return http<void>(`/api/v1/admin/users/${userId}/totp/disable`, { method: "POST" });
 }
 
+export async function adminDeleteUser(userId: number): Promise<void> {
+  return http<void>(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+}
+
 export async function updateProfile(displayName: string, email: string): Promise<{ displayName: string; email: string }> {
   return http<{ displayName: string; email: string }>("/api/v1/auth/profile", {
     method: "PUT",
