@@ -8,6 +8,7 @@ import { ClientIdProvider } from "@/components/client-id-context";
 import { ToastProvider } from "@/components/toast-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { ThemeProvider } from "@/components/theme-context";
+import { UpdateBanner } from "@/components/update-banner";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <BrandingProvider>
                 <ToastProvider>
                   <AppErrorBoundary>
+                    <UpdateBanner />
                     <AppShell>{children}</AppShell>
                   </AppErrorBoundary>
                 </ToastProvider>
