@@ -9,7 +9,7 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, Loader2, Building2, CheckSquare2, Square, Calendar, Lightbulb, AlertTriangle as AlertTriangleIcon, AlertCircle, Info, Clock } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, Loader2, Building2, CheckSquare2, Square, Calendar, Lightbulb, AlertTriangle as AlertTriangleIcon, AlertCircle, Info, Clock, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useClientId } from "@/components/client-id-context";
 import { adminGetClients, getEventAnalytics, getInsightSummary } from "@/lib/api";
@@ -18,7 +18,6 @@ import { useAuth } from "@/components/auth-context";
 import { useTheme } from "@/components/theme-context";
 import { MyTasksCard } from "./my-tasks-card";
 import { WorkloadCard } from "./workload-card";
-import { monthlyData as mockMonthly, typeData as mockType, statusData as mockStatus, locationData as mockLocation, kpi as mockKpi } from "./mock-data";
 import type { MonthlyDataPoint } from "./mock-data";
 
 // ── Date range ─────────────────────────────────────────────────────
@@ -219,6 +218,58 @@ function ChartCard({ title, subtitle, children, className = "" }: {
   );
 }
 
+// ── Empty / Error overlays ────────────────────────────────────────
+
+function EmptyDashboard() {
+  return (
+    <div className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-12 text-center">
+      <div className="w-14 h-14 bg-slate-100 dark:bg-midnight rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <Activity size={24} className="text-slate-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-800 dark:text-steel-white">No event data yet</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
+        Create your first event to start seeing analytics here. Your dashboard will populate with trends, breakdowns, and insights as data comes in.
+      </p>
+      <a href="/events/list" className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+        Go to Events
+      </a>
+    </div>
+  );
+}
+
+function ErrorOverlay({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="bg-white dark:bg-graphite rounded-2xl border border-red-200 dark:border-red-800/40 shadow-sm p-12 text-center">
+      <div className="w-14 h-14 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <AlertTriangleIcon size={24} className="text-red-500" />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-800 dark:text-steel-white">Unable to load dashboard</h3>
+      <p className="text-sm text-red-600 dark:text-red-400 mt-2 max-w-md mx-auto">{message}</p>
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+      >
+        <RefreshCw size={14} />
+        Retry
+      </button>
+    </div>
+  );
+}
+
+function NoClientSelected() {
+  return (
+    <div className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-12 text-center">
+      <div className="w-14 h-14 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <Building2 size={24} className="text-brand" />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-800 dark:text-steel-white">Select a client</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
+        Choose a client from the sidebar to view their dashboard analytics.
+      </p>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -233,6 +284,7 @@ export default function DashboardPage() {
   const [selected, setSelected]   = useState<Set<number>>(new Set());
   const [rangeKey, setRangeKey]   = useState<RangeKey>("12m");
   const [insightSummary, setInsightSummary] = useState<InsightSummaryDto | null>(null);
+  const [retryCount, setRetryCount]       = useState(0);
 
   const activeRange = RANGES.find(r => r.key === rangeKey)!;
   const hasClient = clientId > 0;
@@ -301,10 +353,10 @@ export default function DashboardPage() {
       .then(setAnalytics)
       .catch((e) => setFetchErr(e?.message ?? "Failed to load analytics."))
       .finally(() => setFetching(false));
-  }, [hasClient, selected, rangeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasClient, selected, rangeKey, retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build chart-ready data
-  const monthly     = isLive ? buildMonthlyData(analytics!.byMonth) : mockMonthly;
+  // Build chart-ready data (only when live)
+  const monthly     = isLive ? buildMonthlyData(analytics!.byMonth) : [];
   const avgPerMonth = monthly.length > 0
     ? Math.round(monthly.reduce((s, d) => s + d.total, 0) / monthly.length)
     : 0;
@@ -328,24 +380,25 @@ export default function DashboardPage() {
 
   const chartTypeData = isLive
     ? mergeByName(analytics!.byType, "eventTypeName", "eventTypeId")
-    : mockType;
+    : [];
 
   const chartStatusData = isLive
     ? [
         { name: "Open",   value: analytics!.open,   color: "#2F80ED" },
         { name: "Closed", value: analytics!.closed,  color: "#16A34A" },
       ]
-    : mockStatus;
+    : [];
 
   const chartLocationData = isLive
     ? mergeByName(analytics!.topLocations, "location").slice(0, 8).map(d => ({ location: d.name, count: d.value }))
-    : mockLocation;
+    : [];
 
   const thisMonthTrend = isLive && analytics!.lastMonth !== 0
     ? ((analytics!.thisMonth - analytics!.lastMonth) / analytics!.lastMonth) * 100
     : undefined;
 
-  const total = isLive ? analytics!.total : mockKpi.total;
+  const total = isLive ? analytics!.total : 0;
+  const isEmpty = isLive && analytics!.total === 0;
 
   const gridStroke = theme === "dark" ? "#334155" : "#f1f5f9";
   const tickFill   = "#94a3b8";
@@ -363,19 +416,9 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-steel-white leading-tight">Dashboard</h1>
               {fetching && <Loader2 size={16} className="text-slate-400 animate-spin" />}
-              {!fetching && !isLive && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
-                  Demo Data
-                </span>
-              )}
-              {!fetching && isLive && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
-                  Live
-                </span>
-              )}
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {isLive ? `Event analytics · ${activeRange.subtitle}` : "Set a Client ID above to see live data"}
+              {isLive ? `Event analytics · ${activeRange.subtitle}` : "Select a client to view analytics"}
             </p>
           </div>
         </div>
@@ -439,45 +482,40 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Fetch error */}
-      {fetchErr && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-          Failed to load analytics: {fetchErr}
+      {/* Error state */}
+      {fetchErr && !fetching && <ErrorOverlay message={fetchErr} onRetry={() => setRetryCount(c => c + 1)} />}
+
+      {/* No client selected */}
+      {!hasClient && !fetching && !fetchErr && <NoClientSelected />}
+
+      {/* Empty state — client selected but no events */}
+      {isEmpty && !fetching && !fetchErr && <EmptyDashboard />}
+
+      {/* KPI Cards — only when live data is available */}
+      {isLive && !isEmpty && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {(() => {
+            const now = new Date();
+            const thisMonthFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const thisMonthTo = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-${String(nextMonth.getDate()).padStart(2, "0")}`;
+            return (<>
+              <KpiCard title="Total Events" value={analytics!.total} href="/events/list" />
+              <KpiCard title="Open" value={analytics!.open} goodWhenDown href="/events/list?isClosed=false" />
+              <KpiCard
+                title="This Month"
+                value={analytics!.thisMonth}
+                change={thisMonthTrend}
+                changeLabel="vs last month"
+                goodWhenDown
+                href={`/events/list?dateFrom=${thisMonthFrom}&dateTo=${thisMonthTo}`}
+              />
+              <KpiCard title="Closed" value={analytics!.closed} href="/events/list?isClosed=true" />
+            </>);
+          })()}
+          <SlaBreachedCard count={analytics!.slaBreachedCount} />
         </div>
       )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {(() => {
-          const now = new Date();
-          const thisMonthFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-          const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          const thisMonthTo = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-${String(nextMonth.getDate()).padStart(2, "0")}`;
-          return (<>
-            <KpiCard title="Total Events" value={isLive ? analytics!.total : mockKpi.total}
-              change={isLive ? undefined : mockKpi.totalChange} changeLabel={isLive ? undefined : "vs prior period"}
-              href="/events/list" />
-            <KpiCard title="Open" value={isLive ? analytics!.open : mockKpi.open}
-              change={isLive ? undefined : mockKpi.openChange} changeLabel={isLive ? undefined : "vs prior period"} goodWhenDown
-              href="/events/list?isClosed=false" />
-            <KpiCard
-              title="This Month"
-              value={isLive ? analytics!.thisMonth : mockKpi.thisMonth}
-              change={isLive ? thisMonthTrend : mockKpi.thisMonthChange}
-              changeLabel="vs last month"
-              goodWhenDown
-              href={`/events/list?dateFrom=${thisMonthFrom}&dateTo=${thisMonthTo}`}
-            />
-            <KpiCard title="Closed" value={isLive ? analytics!.closed : mockKpi.total - mockKpi.open}
-              href="/events/list?isClosed=true" />
-          </>);
-        })()}
-        {isLive ? (
-          <SlaBreachedCard count={analytics!.slaBreachedCount} />
-        ) : (
-          <KpiCard title="Past SLA" value={2} />
-        )}
-      </div>
 
       {/* My Tasks + Workload */}
       {hasClient && (
@@ -524,8 +562,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Trend + Donut */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Trend + Donut — only when live data with events */}
+      {isLive && !isEmpty && <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ChartCard
           title="Event Trend"
           subtitle={`Total events · ${isLive ? activeRange.subtitle : "12-month rolling"}`}
@@ -604,7 +642,7 @@ export default function DashboardPage() {
             ))}
           </div>
         </ChartCard>
-      </div>
+      </div>}
 
       {/* SLA / Resolution insight cards — only shown when analytics has them */}
       {isLive && (analytics!.slaClosureComplianceRate !== null || analytics!.avgResolutionDays !== null) && (
@@ -626,8 +664,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Status + Locations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Status + Locations — only when live data with events */}
+      {isLive && !isEmpty && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Status Breakdown" subtitle="Current event resolution state">
           <div className="h-32">
             <ResponsiveContainer width="100%" height="100%">
@@ -676,7 +714,7 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </div>
         </ChartCard>
-      </div>
+      </div>}
 
       {/* Root Cause Distribution — only shown when root cause data is available */}
       {isLive && analytics!.byRootCause.length > 0 && (() => {
