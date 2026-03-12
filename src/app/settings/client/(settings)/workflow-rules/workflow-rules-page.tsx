@@ -95,16 +95,16 @@ export default function WorkflowRulesPage() {
     try {
       const [r, et, ws, u, rc] = await Promise.all([
         getWorkflowRules(clientId),
-        getEventTypes(clientId),
-        getWorkflowStatuses(clientId),
-        getClientUsers(clientId),
-        getRootCauseTaxonomy(clientId).catch(() => []),
+        getEventTypes(clientId).catch(() => [] as EventTypeDto[]),
+        getWorkflowStatuses(clientId).catch(() => [] as WorkflowStatusDto[]),
+        getClientUsers(clientId).catch(() => [] as ClientUserDto[]),
+        getRootCauseTaxonomy(clientId).catch(() => [] as RootCauseTaxonomyItemDto[]),
       ]);
       setRules(r);
       setEventTypes(et);
       setStatuses(ws);
       setUsers(u.filter(x => x.isActive && !x.isSuperAdmin));
-      setRootCauses(rc as RootCauseTaxonomyItemDto[]);
+      setRootCauses(rc);
     } catch {
       toast.error("Failed to load workflow rules.");
     } finally {
