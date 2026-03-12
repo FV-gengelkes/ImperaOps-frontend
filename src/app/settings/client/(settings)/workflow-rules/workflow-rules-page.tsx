@@ -152,36 +152,38 @@ export default function WorkflowRulesPage() {
   function openEdit(rule: WorkflowRuleDto) { setEditingRule(rule); setShowModal(true); }
 
   return (
-    <div className="space-y-6">
+    <div className="pt-10 pl-8 pr-8 pb-8 max-w-3xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Workflow Rules</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Automate event handling — auto-assign owners, change statuses, create tasks, and send notifications.
-          </p>
+      <div className="flex items-center gap-3 mb-2">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand">
+          <Zap className="h-5 w-5 text-white" />
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setShowHistory(!showHistory); if (!showHistory) void loadHistory(); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-          >
-            <History size={14} />
-            {showHistory ? "Hide History" : "History"}
-          </button>
-          <button
-            onClick={openNew}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors"
-          >
-            <Plus size={14} />
-            New Rule
-          </button>
-        </div>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-steel-white">Workflow Rules</h1>
+      </div>
+      <p className="text-slate-500 mb-8">
+        Automate event handling — auto-assign owners, change statuses, create tasks, and send notifications.
+      </p>
+
+      <div className="flex items-center justify-end gap-2 mb-6">
+        <button
+          onClick={() => { setShowHistory(!showHistory); if (!showHistory) void loadHistory(); }}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+        >
+          <History size={14} />
+          {showHistory ? "Hide History" : "History"}
+        </button>
+        <button
+          onClick={openNew}
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors"
+        >
+          <Plus size={14} />
+          New Rule
+        </button>
       </div>
 
       {/* Execution History */}
       {showHistory && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6">
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Executions</h3>
           {execLoading ? (
             <div className="h-20 flex items-center justify-center text-sm text-slate-400">Loading...</div>
