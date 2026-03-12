@@ -77,8 +77,7 @@ export function clearStoredToken() {
 }
 
 function baseUrl() {
-  const v = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!v) throw new Error("Missing NEXT_PUBLIC_API_BASE_URL. Copy .env.local.example to .env.local and set it.");
+  const v = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   return v.replace(/\/$/, "");
 }
 
