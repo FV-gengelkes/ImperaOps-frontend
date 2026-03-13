@@ -1,4 +1,4 @@
-import { Clock, Database, FileText, Key, Sliders, Users, Webhook, Zap } from "lucide-react";
+import { Clock, Database, FileText, Key, Mail, Sliders, Users, Webhook, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type MinRole = "Manager" | "Admin";
@@ -75,6 +75,13 @@ export const settingsSections: SettingsSection[] = [
         description: "Auto-assign, auto-tag, escalate, and create tasks based on event conditions.",
         icon: Zap,
         minRole: "Manager",
+      },
+      {
+        href: "/settings/client/reports",
+        label: "Scheduled Reports",
+        description: "Send weekly or monthly email digests with event KPIs to your team.",
+        icon: Mail,
+        minRole: "Admin",
       },
     ],
   },

@@ -708,3 +708,18 @@ export type ApiCredentialAuditLogDto = {
   detailsJson: string | null;
   createdAt: string;
 };
+
+export type ReportScheduleDto = {
+  frequency: string;
+  dayOfWeek: number;
+  dayOfMonth: number;
+  isEnabled: boolean;
+  lastSentAt: string | null;
+};
+
+export type UpsertReportScheduleRequest = {
+  frequency: string;
+  dayOfWeek: number;
+  dayOfMonth: number;
+  isEnabled: boolean;
+};

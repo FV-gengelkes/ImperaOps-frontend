@@ -57,6 +57,8 @@ import type {
   WitnessDto,
   WorkflowStatusDto,
   WorkflowTransitionDto,
+  ReportScheduleDto,
+  UpsertReportScheduleRequest,
 } from "./types";
 
 export type { BulkDeleteEventRequest, BulkUpdateEventRequest };
@@ -294,6 +296,25 @@ export async function exportAuditCsv(clientId: number): Promise<void> {
   a.download = res.headers.get("content-disposition")?.match(/filename=(.+)/)?.[1] ?? `audit-log-${clientId}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Report schedule ─────────────────────────────────────────────────────────
+
+export async function getReportSchedule(clientId: number): Promise<ReportScheduleDto | null> {
+  try {
+    return await http<ReportScheduleDto>(`/api/v1/clients/${clientId}/report-schedule`);
+  } catch (e: any) {
+    if (e?.status === 404) return null;
+    throw e;
+  }
+}
+
+export async function upsertReportSchedule(clientId: number, body: UpsertReportScheduleRequest): Promise<ReportScheduleDto> {
+  return http<ReportScheduleDto>(`/api/v1/clients/${clientId}/report-schedule`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export async function deleteReportSchedule(clientId: number): Promise<void> {
+  await http<void>(`/api/v1/clients/${clientId}/report-schedule`, { method: "DELETE" });
 }
 
 export async function getClientTemplates(clientId: number): Promise<EventTemplateDto[]> {
