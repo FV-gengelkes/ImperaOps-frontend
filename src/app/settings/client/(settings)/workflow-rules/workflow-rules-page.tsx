@@ -55,12 +55,13 @@ const SELECT_OPERATORS = [
 ];
 
 const ACTION_TYPES = [
-  { value: "assign_owner",    label: "Assign Owner",      icon: "👤" },
-  { value: "change_status",   label: "Change Status",     icon: "🔄" },
-  { value: "create_task",     label: "Create Task",       icon: "✓" },
-  { value: "send_notification", label: "Send Notification", icon: "🔔" },
-  { value: "add_comment",     label: "Add Comment",       icon: "💬" },
-  { value: "set_root_cause",  label: "Set Root Cause",    icon: "🔍" },
+  { value: "assign_owner",        label: "Assign Owner",        icon: "👤" },
+  { value: "round_robin_assign",  label: "Round-Robin Assign",  icon: "🔁" },
+  { value: "change_status",       label: "Change Status",       icon: "🔄" },
+  { value: "create_task",         label: "Create Task",         icon: "✓" },
+  { value: "send_notification",   label: "Send Notification",   icon: "🔔" },
+  { value: "add_comment",         label: "Add Comment",         icon: "💬" },
+  { value: "set_root_cause",      label: "Set Root Cause",      icon: "🔍" },
 ];
 
 const inputCls =
@@ -374,6 +375,7 @@ function formatAction(a: WorkflowAction, statuses: WorkflowStatusDto[], users: C
 
   switch (a.type) {
     case "assign_owner": return `Assign → ${users.find(u => u.id === c.userId)?.displayName ?? "User"}`;
+    case "round_robin_assign": return `Round-robin → ${c.roundRobinUserIds?.length ?? 0} users`;
     case "change_status": return `Status → ${statuses.find(s => s.id === c.workflowStatusId)?.name ?? "Status"}`;
     case "create_task": return `Task: ${c.taskTitle ?? "New Task"}`;
     case "send_notification": return `Notify ${(c.notifyRoles?.length ?? 0) + (c.notifyUserIds?.length ?? 0)} targets`;
@@ -673,6 +675,34 @@ function ActionRow({
           <option value="">— Select user —</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.displayName}</option>)}
         </select>
+      )}
+
+      {action.type === "round_robin_assign" && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-slate-500">Select users to rotate assignments between:</p>
+          <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2">
+            {users.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No users available</p>
+            ) : users.map(u => (
+              <label key={u.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                <input type="checkbox" className="rounded"
+                  checked={c.roundRobinUserIds?.includes(u.id) ?? false}
+                  onChange={e => {
+                    const current = c.roundRobinUserIds ?? [];
+                    onConfigChange({
+                      roundRobinUserIds: e.target.checked
+                        ? [...current, u.id]
+                        : current.filter(id => id !== u.id),
+                    });
+                  }} />
+                {u.displayName}
+              </label>
+            ))}
+          </div>
+          {(c.roundRobinUserIds?.length ?? 0) > 0 && (
+            <p className="text-[11px] text-slate-400">{c.roundRobinUserIds!.length} user{c.roundRobinUserIds!.length !== 1 ? "s" : ""} in rotation pool</p>
+          )}
+        </div>
       )}
 
       {action.type === "change_status" && (

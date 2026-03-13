@@ -646,6 +646,7 @@ export type WorkflowActionConfig = {
   notificationMessage?: string | null;
   commentBody?: string | null;
   rootCauseId?: number | null;
+  roundRobinUserIds?: number[] | null;
 };
 
 export type WorkflowRuleExecutionDto = {
