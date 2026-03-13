@@ -7,26 +7,31 @@ const DISMISSED_PREFIX = "imperaops.onboarding.dismissed.";
 
 export function useOnboardingCheck(clientId: number) {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [wasDismissed, setWasDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (clientId <= 0) {
       setNeedsOnboarding(false);
+      setWasDismissed(false);
       setLoading(false);
       return;
     }
 
     const key = `${DISMISSED_PREFIX}${clientId}`;
-    if (typeof window !== "undefined" && localStorage.getItem(key) === "true") {
-      setNeedsOnboarding(false);
-      setLoading(false);
-      return;
-    }
+    const dismissed = typeof window !== "undefined" && localStorage.getItem(key) === "true";
 
     setLoading(true);
     getEventTypes(clientId)
-      .then((types) => setNeedsOnboarding(types.length === 0))
-      .catch(() => setNeedsOnboarding(false))
+      .then((types) => {
+        const unconfigured = types.length === 0;
+        setNeedsOnboarding(unconfigured && !dismissed);
+        setWasDismissed(unconfigured && dismissed);
+      })
+      .catch(() => {
+        setNeedsOnboarding(false);
+        setWasDismissed(false);
+      })
       .finally(() => setLoading(false));
   }, [clientId]);
 
@@ -35,11 +40,21 @@ export function useOnboardingCheck(clientId: number) {
       localStorage.setItem(`${DISMISSED_PREFIX}${clientId}`, "true");
     }
     setNeedsOnboarding(false);
+    setWasDismissed(true);
   }
 
   function markComplete() {
     setNeedsOnboarding(false);
+    setWasDismissed(false);
   }
 
-  return { needsOnboarding, loading, dismiss, markComplete };
+  function relaunch() {
+    if (clientId > 0) {
+      localStorage.removeItem(`${DISMISSED_PREFIX}${clientId}`);
+    }
+    setNeedsOnboarding(true);
+    setWasDismissed(false);
+  }
+
+  return { needsOnboarding, wasDismissed, loading, dismiss, markComplete, relaunch };
 }

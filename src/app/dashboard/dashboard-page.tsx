@@ -223,7 +223,7 @@ function ChartCard({ title, subtitle, children, className = "" }: {
 
 // ── Empty / Error overlays ────────────────────────────────────────
 
-function EmptyDashboard() {
+function EmptyDashboard({ onRunSetup }: { onRunSetup?: () => void }) {
   return (
     <div className="bg-white dark:bg-graphite rounded-2xl border border-slate-200 dark:border-slate-line shadow-sm p-12 text-center">
       <div className="w-14 h-14 bg-slate-100 dark:bg-midnight rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -233,9 +233,23 @@ function EmptyDashboard() {
       <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
         Create your first event to start seeing analytics here. Your dashboard will populate with trends, breakdowns, and insights as data comes in.
       </p>
-      <a href="/events/list" className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-        Go to Events
-      </a>
+      <div className="flex items-center justify-center gap-3 mt-5">
+        {onRunSetup && (
+          <button
+            onClick={onRunSetup}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+          >
+            Run Setup Wizard
+          </button>
+        )}
+        <a href="/events/list" className={`inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm ${
+          onRunSetup
+            ? "border border-slate-300 dark:border-slate-line text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-midnight"
+            : "bg-brand hover:bg-brand-hover text-white"
+        }`}>
+          Go to Events
+        </a>
+      </div>
     </div>
   );
 }
@@ -282,7 +296,7 @@ export default function DashboardPage() {
   const router                    = useRouter();
   const role = clients.find((c) => c.id === clientId)?.role;
   const showOnboarding = isAdmin(isSuperAdmin, role);
-  const { needsOnboarding, dismiss: dismissOnboarding, markComplete: completeOnboarding } = useOnboardingCheck(clientId);
+  const { needsOnboarding, wasDismissed, dismiss: dismissOnboarding, markComplete: completeOnboarding, relaunch: relaunchOnboarding } = useOnboardingCheck(clientId);
   const [analytics, setAnalytics] = useState<EventAnalyticsDto | null>(null);
   const [fetching, setFetching]   = useState(false);
   const [fetchErr, setFetchErr]   = useState("");
@@ -504,7 +518,9 @@ export default function DashboardPage() {
       )}
 
       {/* Empty state — client selected but no events */}
-      {isEmpty && !fetching && !fetchErr && !needsOnboarding && <EmptyDashboard />}
+      {isEmpty && !fetching && !fetchErr && !needsOnboarding && (
+        <EmptyDashboard onRunSetup={showOnboarding && wasDismissed ? relaunchOnboarding : undefined} />
+      )}
 
       {/* KPI Cards — only when live data is available */}
       {isLive && !isEmpty && (
