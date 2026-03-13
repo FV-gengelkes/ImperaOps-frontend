@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Key, Plus, Trash2, RefreshCw, Pencil, X, Copy, Check, ShieldOff, Eye, EyeOff, Clock } from "lucide-react";
+import { Key, Plus, Trash2, RefreshCw, Pencil, X, Copy, Check, ShieldOff, Eye, EyeOff, Clock, Book } from "lucide-react";
+import Link from "next/link";
 import { useClientId } from "@/components/client-id-context";
 import { useAuth } from "@/components/auth-context";
 import { isAdmin as checkAdmin } from "@/lib/role-helpers";
@@ -587,10 +588,17 @@ export default function ApiKeysPage() {
         </div>
         <h1 className="text-2xl font-semibold text-slate-900">API Keys</h1>
       </div>
-      <p className="text-slate-500 mb-8">
+      <p className="text-slate-500 mb-4">
         Create machine-to-machine API credentials for external integrations.
         Each key has scoped permissions and can be revoked at any time.
       </p>
+      <Link
+        href="/settings/client/api-keys/docs"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:text-brand-hover transition-colors mb-8"
+      >
+        <Book size={14} />
+        View API Documentation
+      </Link>
 
       {!clientId ? (
         <p className="text-sm text-slate-400">Set a client to manage API keys.</p>
@@ -760,22 +768,28 @@ export default function ApiKeysPage() {
 
           {/* Usage reference */}
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">Usage</h3>
-            <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-slate-700">{`# Create an event via the Public API
-curl -X POST https://api.imperaops.com/public/v1/events \\
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">Quick Start</h3>
+            <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-slate-700">{`curl -X POST https://imperaops.com/public/v1/events \\
   -H "Authorization: Bearer {clientSid}.{keyId}.{secret}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Server CPU spike",
-    "type": "Infrastructure",
+    "type": "Incident",
     "severity": "high",
     "source": "monitoring",
     "externalId": "alert-12345"
   }'`}</pre>
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-slate-500 mt-3">
               The authorization header is shown once when you create a key. Use the format{" "}
               <code className="bg-slate-100 px-1 rounded">Bearer &#123;clientSid&#125;.&#123;keyId&#125;.&#123;secret&#125;</code>.
             </p>
+            <Link
+              href="/settings/client/api-keys/docs"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:text-brand-hover transition-colors mt-3"
+            >
+              <Book size={12} />
+              Full API Documentation — endpoints, examples, error codes, and more
+            </Link>
           </div>
         </div>
       )}
