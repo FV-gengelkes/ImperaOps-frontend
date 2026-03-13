@@ -254,6 +254,18 @@ export async function adminApplyTemplate(clientId: number, templateId: string, s
   });
 }
 
+// ── Client-scoped templates (for onboarding wizard) ─────────────────
+
+export async function getClientTemplates(clientId: number): Promise<EventTemplateDto[]> {
+  return http<EventTemplateDto[]>(`/api/v1/clients/${clientId}/templates`);
+}
+
+export async function applyClientTemplate(clientId: number, templateId: string): Promise<void> {
+  return http<void>(`/api/v1/clients/${clientId}/apply-template/${templateId}`, {
+    method: "POST",
+  });
+}
+
 export async function adminPurgeEvents(clientId: number, confirmName: string): Promise<{ purgedEventCount: number }> {
   return http<{ purgedEventCount: number }>(`/api/v1/admin/clients/${clientId}/purge-events`, {
     method: "POST",

@@ -16,6 +16,9 @@ import { adminGetClients, getEventAnalytics, getInsightSummary } from "@/lib/api
 import type { ClientAccessDto, EventAnalyticsDto, InsightSummaryDto } from "@/lib/types";
 import { useAuth } from "@/components/auth-context";
 import { useTheme } from "@/components/theme-context";
+import { isAdmin } from "@/lib/role-helpers";
+import { useOnboardingCheck } from "@/hooks/use-onboarding-check";
+import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { MyTasksCard } from "./my-tasks-card";
 import { WorkloadCard } from "./workload-card";
 import type { MonthlyDataPoint } from "./mock-data";
@@ -277,6 +280,9 @@ export default function DashboardPage() {
   const { clients, isSuperAdmin } = useAuth();
   const { theme }                 = useTheme();
   const router                    = useRouter();
+  const role = clients.find((c) => c.id === clientId)?.role;
+  const showOnboarding = isAdmin(isSuperAdmin, role);
+  const { needsOnboarding, dismiss: dismissOnboarding, markComplete: completeOnboarding } = useOnboardingCheck(clientId);
   const [analytics, setAnalytics] = useState<EventAnalyticsDto | null>(null);
   const [fetching, setFetching]   = useState(false);
   const [fetchErr, setFetchErr]   = useState("");
@@ -488,8 +494,17 @@ export default function DashboardPage() {
       {/* No client selected */}
       {!hasClient && !fetching && !fetchErr && <NoClientSelected />}
 
+      {/* Onboarding wizard — admin with no event types */}
+      {showOnboarding && needsOnboarding && (
+        <OnboardingWizard
+          clientId={clientId}
+          onDismiss={dismissOnboarding}
+          onComplete={completeOnboarding}
+        />
+      )}
+
       {/* Empty state — client selected but no events */}
-      {isEmpty && !fetching && !fetchErr && <EmptyDashboard />}
+      {isEmpty && !fetching && !fetchErr && !needsOnboarding && <EmptyDashboard />}
 
       {/* KPI Cards — only when live data is available */}
       {isLive && !isEmpty && (
