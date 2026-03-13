@@ -519,7 +519,7 @@ export default function DashboardPage() {
 
       {/* Empty state — client selected but no events */}
       {isEmpty && !fetching && !fetchErr && !needsOnboarding && (
-        <EmptyDashboard onRunSetup={showOnboarding && wasDismissed ? relaunchOnboarding : undefined} />
+        <EmptyDashboard onRunSetup={showOnboarding ? relaunchOnboarding : undefined} />
       )}
 
       {/* KPI Cards — only when live data is available */}
