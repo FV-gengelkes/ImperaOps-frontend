@@ -16,10 +16,11 @@ const TEMPLATE_ICONS: Record<string, React.ElementType> = {
 interface TemplateStepProps {
   clientId: number;
   onNext: () => void;
+  onBack: () => void;
   onSkip: () => void;
 }
 
-export function TemplateStep({ clientId, onNext, onSkip }: TemplateStepProps) {
+export function TemplateStep({ clientId, onNext, onBack, onSkip }: TemplateStepProps) {
   const [templates, setTemplates] = useState<EventTemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -124,13 +125,22 @@ export function TemplateStep({ clientId, onNext, onSkip }: TemplateStepProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <button
-          onClick={onSkip}
-          disabled={applying}
-          className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-        >
-          Skip for now
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            disabled={applying}
+            className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+          >
+            &larr; Back
+          </button>
+          <button
+            onClick={onSkip}
+            disabled={applying}
+            className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            Skip for now
+          </button>
+        </div>
         <button
           onClick={handleApply}
           disabled={!selectedId || applying}

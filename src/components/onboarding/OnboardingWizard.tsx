@@ -84,6 +84,7 @@ export function OnboardingWizard({ clientId, onDismiss, onComplete }: Onboarding
             <TemplateStep
               clientId={clientId}
               onNext={() => setStep("invite")}
+              onBack={() => setStep("welcome")}
               onSkip={() => setStep("invite")}
             />
           )}
@@ -91,11 +92,12 @@ export function OnboardingWizard({ clientId, onDismiss, onComplete }: Onboarding
             <InviteStep
               clientId={clientId}
               onNext={() => setStep("done")}
+              onBack={() => setStep("template")}
               onSkip={() => setStep("done")}
             />
           )}
           {step === "done" && (
-            <DoneStep onComplete={onComplete} />
+            <DoneStep onComplete={onComplete} onBack={() => setStep("invite")} />
           )}
         </div>
       </div>

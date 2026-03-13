@@ -21,10 +21,11 @@ function emptyRow(): InviteRow {
 interface InviteStepProps {
   clientId: number;
   onNext: () => void;
+  onBack: () => void;
   onSkip: () => void;
 }
 
-export function InviteStep({ clientId, onNext, onSkip }: InviteStepProps) {
+export function InviteStep({ clientId, onNext, onBack, onSkip }: InviteStepProps) {
   const [rows, setRows] = useState<InviteRow[]>([emptyRow()]);
   const [sending, setSending] = useState(false);
 
@@ -147,13 +148,22 @@ export function InviteStep({ clientId, onNext, onSkip }: InviteStepProps) {
       )}
 
       <div className="flex items-center justify-between">
-        <button
-          onClick={onSkip}
-          disabled={sending}
-          className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-        >
-          Skip for now
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            disabled={sending}
+            className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+          >
+            &larr; Back
+          </button>
+          <button
+            onClick={onSkip}
+            disabled={sending}
+            className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            Skip for now
+          </button>
+        </div>
         <button
           onClick={handleSend}
           disabled={sending}

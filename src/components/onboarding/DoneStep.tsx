@@ -5,9 +5,10 @@ import { CheckCircle2, PlusCircle, LayoutDashboard, Settings } from "lucide-reac
 
 interface DoneStepProps {
   onComplete: () => void;
+  onBack: () => void;
 }
 
-export function DoneStep({ onComplete }: DoneStepProps) {
+export function DoneStep({ onComplete, onBack }: DoneStepProps) {
   const router = useRouter();
 
   return (
@@ -22,6 +23,15 @@ export function DoneStep({ onComplete }: DoneStepProps) {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
           You&apos;re all set. Here are some next steps to get started.
         </p>
+      </div>
+
+      <div className="flex justify-start mb-4">
+        <button
+          onClick={onBack}
+          className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+        >
+          &larr; Back
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
