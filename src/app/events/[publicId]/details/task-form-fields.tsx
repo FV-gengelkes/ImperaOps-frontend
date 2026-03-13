@@ -41,6 +41,7 @@ export function TaskFormFields({
         onChange={e => onChange({ title: e.target.value })}
         onKeyDown={e => { if (e.key === "Escape") onCancel(); }}
         autoFocus={!titleRef}
+        maxLength={500}
       />
       <textarea
         className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand/40 resize-none"
@@ -48,6 +49,7 @@ export function TaskFormFields({
         placeholder="Notes (optional)"
         value={form.description}
         onChange={e => onChange({ description: e.target.value })}
+        maxLength={5000}
       />
       <div className="flex gap-2">
         <select

@@ -88,6 +88,35 @@ export class ApiError extends Error {
   }
 }
 
+let _refreshing: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const token = getStoredToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`${baseUrl()}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data?.token) { setStoredToken(data.token); return true; }
+    return false;
+  } catch { return false; }
+}
+
+function forceLogout() {
+  clearStoredToken();
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem("imperaops.user");
+    window.localStorage.removeItem("imperaops.clients");
+    window.localStorage.removeItem("imperaops.isSuperAdmin");
+    window.localStorage.removeItem("imperaops.clientId");
+    window.location.href = "/login";
+  }
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredToken();
   const res = await fetch(`${baseUrl()}${path}`, {
@@ -101,16 +130,12 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      // Token expired or invalid — clear session and redirect to login
-      clearStoredToken();
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("imperaops.user");
-        window.localStorage.removeItem("imperaops.clients");
-        window.localStorage.removeItem("imperaops.isSuperAdmin");
-        window.localStorage.removeItem("imperaops.clientId");
-        window.location.href = "/login";
-      }
+    if (res.status === 401 && path !== "/api/v1/auth/refresh") {
+      // Attempt silent refresh once, then retry the original request
+      if (!_refreshing) _refreshing = tryRefreshToken().finally(() => { _refreshing = null; });
+      const refreshed = await _refreshing;
+      if (refreshed) return http<T>(path, init);
+      forceLogout();
     }
     const text = await res.text();
     throw new ApiError(res.status, `${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
@@ -255,6 +280,21 @@ export async function adminApplyTemplate(clientId: number, templateId: string, s
 }
 
 // ── Client-scoped templates (for onboarding wizard) ─────────────────
+
+export async function exportAuditCsv(clientId: number): Promise<void> {
+  const token = getStoredToken();
+  const res = await fetch(`${baseUrl()}/api/v1/clients/${clientId}/audit/export`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ApiError(res.status, "Export failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = res.headers.get("content-disposition")?.match(/filename=(.+)/)?.[1] ?? `audit-log-${clientId}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export async function getClientTemplates(clientId: number): Promise<EventTemplateDto[]> {
   return http<EventTemplateDto[]>(`/api/v1/clients/${clientId}/templates`);

@@ -374,6 +374,7 @@ export function EventAuditLog({ publicId, view }: { publicId: string; view: "aud
               value={comment}
               onChange={handleCommentChange}
               onKeyDown={handleTextareaKeyDown}
+              maxLength={10000}
             />
           </div>
           {postError && <p className="text-xs text-red-500 mt-1">{postError}</p>}

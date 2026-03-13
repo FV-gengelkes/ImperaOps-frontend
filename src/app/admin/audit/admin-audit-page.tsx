@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Loader2, ChevronLeft, ChevronRight, Building2, ChevronDown, Check, Search } from "lucide-react";
-import { adminGetAuditLog, adminGetClients } from "@/lib/api";
+import { ShieldAlert, Loader2, ChevronLeft, ChevronRight, Building2, ChevronDown, Check, Search, Download } from "lucide-react";
+import { adminGetAuditLog, adminGetClients, exportAuditCsv } from "@/lib/api";
 import type { AdminAuditEventDto, AdminClientDto } from "@/lib/types";
 
 const PAGE_SIZE = 50;
@@ -195,6 +195,16 @@ export function AdminAuditPage() {
                 selected={selectedClientId}
                 onChange={handleClientChange}
               />
+            )}
+            {selectedClientId && (
+              <button
+                onClick={() => exportAuditCsv(selectedClientId)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-600 bg-slate-800/60 text-sm text-slate-200 hover:border-slate-500 hover:bg-slate-700/60 transition-colors"
+                title="Export audit log as CSV"
+              >
+                <Download size={14} />
+                Export
+              </button>
             )}
             {!loading && total > 0 && (
               <span className="text-xs text-slate-400 whitespace-nowrap">{total.toLocaleString()} entries</span>

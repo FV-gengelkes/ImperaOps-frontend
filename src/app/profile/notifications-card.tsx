@@ -12,9 +12,10 @@ const NOTIF_LABELS: Record<string, string> = {
   comment_added:    "Comment on my event",
   status_changed:   "Status changed on my event",
   task_due_reminder: "Task due-date reminders",
+  workflow_rule:     "Workflow rule alerts",
 };
 
-const KNOWN_TYPES = ["event_assigned", "task_assigned", "comment_added", "status_changed", "task_due_reminder"] as const;
+const KNOWN_TYPES = ["event_assigned", "task_assigned", "comment_added", "status_changed", "task_due_reminder", "workflow_rule"] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (

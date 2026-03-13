@@ -236,6 +236,7 @@ export function EventDetailsForm(props: Props) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Brief summary of the event"
+              maxLength={500}
             />
           </Field>
 
@@ -329,6 +330,7 @@ export function EventDetailsForm(props: Props) {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g. I-80 MM 225, Dallas Distribution Hub"
+              maxLength={256}
             />
           </Field>
 
@@ -344,6 +346,7 @@ export function EventDetailsForm(props: Props) {
               onChange={(e) => setDescription(e.target.value)}
               rows={5}
               placeholder="Describe what happened, any contributing factors, and immediate actions taken."
+              maxLength={5000}
             />
           </Field>
 
@@ -382,6 +385,7 @@ export function EventDetailsForm(props: Props) {
                   placeholder="Describe the corrective action taken…"
                   value={correctiveAction ?? ""}
                   onChange={e => setCorrectiveAction(e.target.value || null)}
+                  maxLength={500}
                 />
               </Field>
             </div>

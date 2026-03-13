@@ -3,10 +3,13 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
+import { useTokenRefresh } from "@/hooks/use-token-refresh";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, ready } = useAuth();
   const router = useRouter();
+
+  useTokenRefresh();
 
   useEffect(() => {
     if (ready && !isAuthenticated) {
