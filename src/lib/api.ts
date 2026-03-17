@@ -61,6 +61,10 @@ import type {
   UpsertReportScheduleRequest,
   ModuleDefinitionDto,
   ClientModulesDto,
+  AgFieldDto,
+  AgFieldListItemDto,
+  SprayJobDto,
+  SprayJobListItemDto,
 } from "./types";
 
 export type { BulkDeleteEventRequest, BulkUpdateEventRequest };
@@ -1399,4 +1403,50 @@ export async function adminUpdateClientModules(clientId: number, moduleIds: stri
     method: "PUT",
     body: JSON.stringify({ moduleIds }),
   });
+}
+
+// ── Ag Field Mapping ─────────────────────────────────────────────────────────
+
+export async function getAgFields(clientId: number): Promise<AgFieldListItemDto[]> {
+  return http<AgFieldListItemDto[]>(`/api/v1/clients/${clientId}/ag/fields`);
+}
+
+export async function getAgField(clientId: number, fieldId: number): Promise<AgFieldDto> {
+  return http<AgFieldDto>(`/api/v1/clients/${clientId}/ag/fields/${fieldId}`);
+}
+
+export async function createAgField(clientId: number, req: { name: string; acreage?: number | null; growerName?: string | null; growerContact?: string | null; address?: string | null; boundaryGeoJson?: string | null; notes?: string | null }): Promise<AgFieldDto> {
+  return http<AgFieldDto>(`/api/v1/clients/${clientId}/ag/fields`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+}
+
+export async function updateAgField(clientId: number, fieldId: number, req: { name: string; acreage?: number | null; growerName?: string | null; growerContact?: string | null; address?: string | null; boundaryGeoJson?: string | null; notes?: string | null }): Promise<void> {
+  await http<void>(`/api/v1/clients/${clientId}/ag/fields/${fieldId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+}
+
+export async function deleteAgField(clientId: number, fieldId: number): Promise<void> {
+  await http<void>(`/api/v1/clients/${clientId}/ag/fields/${fieldId}`, { method: "DELETE" });
+}
+
+export async function getSprayJobs(clientId: number, filters?: { fieldId?: number; status?: string }): Promise<SprayJobListItemDto[]> {
+  const params = new URLSearchParams();
+  if (filters?.fieldId) params.set("fieldId", String(filters.fieldId));
+  if (filters?.status) params.set("status", filters.status);
+  const qs = params.toString();
+  return http<SprayJobListItemDto[]>(`/api/v1/clients/${clientId}/ag/jobs${qs ? `?${qs}` : ""}`);
+}
+
+export async function getSprayJob(clientId: number, jobId: number): Promise<SprayJobDto> {
+  return http<SprayJobDto>(`/api/v1/clients/${clientId}/ag/jobs/${jobId}`);
+}
+
+export async function createSprayJob(clientId: number, req: { fieldId: number; scheduledDate?: string | null; droneOperator?: string | null; product?: string | null; applicationRate?: string | null; applicationUnit?: string | null; weatherConditions?: string | null; notes?: string | null }): Promise<SprayJobDto> {
+  return http<SprayJobDto>(`/api/v1/clients/${clientId}/ag/jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+}
+
+export async function updateSprayJob(clientId: number, jobId: number, req: { fieldId: number; status: string; scheduledDate?: string | null; completedDate?: string | null; droneOperator?: string | null; product?: string | null; applicationRate?: string | null; applicationUnit?: string | null; weatherConditions?: string | null; flightLogGeoJson?: string | null; notes?: string | null }): Promise<void> {
+  await http<void>(`/api/v1/clients/${clientId}/ag/jobs/${jobId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+}
+
+export async function deleteSprayJob(clientId: number, jobId: number): Promise<void> {
+  await http<void>(`/api/v1/clients/${clientId}/ag/jobs/${jobId}`, { method: "DELETE" });
 }

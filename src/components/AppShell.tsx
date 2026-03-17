@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, ChevronDown, Keyboard, LayoutDashboard, Lightbulb, LogOut, Menu, Moon, Plus, Search, Settings, Shield, ShieldAlert, Sun, User, Users, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Keyboard, LayoutDashboard, Lightbulb, LogOut, MapPin, Menu, Moon, Plane, Plus, Search, Settings, Shield, ShieldAlert, Sun, User, Users, X } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { useBranding } from "./branding-context";
+import { useModules } from "./modules-context";
 import { useClientChangeRedirect } from "@/hooks/use-client-change-redirect";
 import { useEffect, useRef, useState } from "react";
 import { adminGetClients } from "@/lib/api";
@@ -378,6 +379,7 @@ function MobileDrawer({
   handleLogout,
   logoSrc,
   systemName,
+  hasModule,
 }: {
   open: boolean;
   onClose: () => void;
@@ -388,6 +390,7 @@ function MobileDrawer({
   handleLogout: () => void;
   logoSrc: string;
   systemName: string | null;
+  hasModule: (id: string) => boolean;
 }) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -434,6 +437,16 @@ function MobileDrawer({
           {operations.map(({ href, label, icon: Icon }) => (
             <SidebarLink key={href} href={href} label={label} Icon={Icon} active={isActive(href)} />
           ))}
+
+          {hasModule("ag_field_mapping") && (
+            <>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-3">
+                Ag Field Mapping
+              </p>
+              <SidebarLink href="/ag/fields" label="Fields" Icon={MapPin} active={isActive("/ag/fields")} />
+              <SidebarLink href="/ag/jobs" label="Spray Jobs" Icon={Plane} active={isActive("/ag/jobs")} />
+            </>
+          )}
 
           {isSuperAdmin && (
             <>
@@ -490,6 +503,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout, isAuthenticated, isSuperAdmin, ready } = useAuth();
   const { theme, toggle } = useTheme();
   const { branding } = useBranding();
+  const { hasModule } = useModules();
   const logoSrc    = branding?.logoUrl    ?? "/logo-icon.png";
   const systemName = branding?.systemName ?? null;
   const [drawerOpen, setDrawerOpen]   = useState(false);
@@ -589,6 +603,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarLink key={href} href={href} label={label} Icon={Icon} active={isActive(href)} />
           ))}
 
+          {hasModule("ag_field_mapping") && (
+            <>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-3">
+                Ag Field Mapping
+              </p>
+              <SidebarLink href="/ag/fields" label="Fields" Icon={MapPin} active={isActive("/ag/fields")} />
+              <SidebarLink href="/ag/jobs" label="Spray Jobs" Icon={Plane} active={isActive("/ag/jobs")} />
+            </>
+          )}
+
           {isSuperAdmin && (
             <>
               <div className="my-4 border-t border-slate-line/60" />
@@ -680,6 +704,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         handleLogout={handleLogout}
         logoSrc={logoSrc}
         systemName={systemName}
+        hasModule={hasModule}
       />
 
       {/* ── Keyboard shortcuts modal ────────────────────────── */}

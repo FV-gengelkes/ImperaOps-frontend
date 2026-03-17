@@ -738,3 +738,63 @@ export type ModuleDefinitionDto = {
 export type ClientModulesDto = {
   enabledModuleIds: string[];
 };
+
+// ── Ag Field Mapping ─────────────────────────────────────────────────────────
+
+export type AgFieldDto = {
+  id: number;
+  clientId: number;
+  name: string;
+  acreage: number | null;
+  growerName: string | null;
+  growerContact: string | null;
+  address: string | null;
+  boundaryGeoJson: string | null;
+  notes: string | null;
+  sprayJobCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgFieldListItemDto = {
+  id: number;
+  name: string;
+  acreage: number | null;
+  growerName: string | null;
+  address: string | null;
+  sprayJobCount: number;
+  createdAt: string;
+};
+
+export type SprayJobDto = {
+  id: number;
+  clientId: number;
+  fieldId: number;
+  fieldName: string | null;
+  jobNumber: string;
+  status: string;
+  scheduledDate: string | null;
+  completedDate: string | null;
+  droneOperator: string | null;
+  product: string | null;
+  applicationRate: string | null;
+  applicationUnit: string | null;
+  weatherConditions: string | null;
+  flightLogGeoJson: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SprayJobListItemDto = {
+  id: number;
+  jobNumber: string;
+  fieldId: number;
+  fieldName: string | null;
+  status: string;
+  scheduledDate: string | null;
+  completedDate: string | null;
+  droneOperator: string | null;
+  product: string | null;
+  createdAt: string;
+};
