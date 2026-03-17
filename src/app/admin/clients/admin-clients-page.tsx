@@ -19,6 +19,7 @@ import { ClientUsersSection } from "./client-users-section";
 import { ClientBrandingSection } from "./client-branding-section";
 import { ClientInboundEmailSection } from "./client-inbound-email-section";
 import { ClientSlaSection } from "./client-sla-section";
+import { ClientModulesSection } from "./client-modules-section";
 import { ClientPurgeSection } from "./client-purge-section";
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ const statusConfig: Record<string, { dot: string; label: string; badge: string }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
-type ClientDetailTab = "users" | "branding" | "reporting" | "templates" | "sla" | "data";
+type ClientDetailTab = "users" | "branding" | "reporting" | "templates" | "sla" | "modules" | "data";
 
 export function AdminClientsPage() {
   const { activeClientId, setActiveClientId, refreshClients } = useAuth();
@@ -318,9 +319,9 @@ export function AdminClientsPage() {
 
             {/* Detail tabs */}
             <div className="border-b border-slate-700/60 mb-6 flex gap-1">
-              {(["users", "branding", "reporting", "templates", "sla", "data"] as const).map(tab => {
+              {(["users", "branding", "reporting", "templates", "sla", "modules", "data"] as const).map(tab => {
                 const labels: Record<string, string> = {
-                  users: "Users", branding: "Branding", reporting: "Reporting", templates: "Templates", sla: "SLA Rules", data: "Data",
+                  users: "Users", branding: "Branding", reporting: "Reporting", templates: "Templates", sla: "SLA Rules", modules: "Modules", data: "Data",
                 };
                 return (
                   <button
@@ -436,6 +437,10 @@ export function AdminClientsPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {clientDetailTab === "modules" && (
+              <ClientModulesSection clientId={selectedClient.id} />
             )}
 
             {clientDetailTab === "data" && (

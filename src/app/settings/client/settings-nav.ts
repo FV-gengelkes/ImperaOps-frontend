@@ -9,6 +9,7 @@ export type SettingsNavItem = {
   description: string;
   icon: LucideIcon;
   minRole: MinRole;
+  moduleId?: string;
 };
 
 export type SettingsSection = {

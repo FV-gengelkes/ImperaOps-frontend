@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/auth-context";
 import { BrandingProvider } from "@/components/branding-context";
+import { ModulesProvider } from "@/components/modules-context";
 import { ClientIdProvider } from "@/components/client-id-context";
 import { ToastProvider } from "@/components/toast-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
@@ -32,12 +33,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <ClientIdProvider>
               <BrandingProvider>
-                <ToastProvider>
-                  <AppErrorBoundary>
-                    <UpdateBanner />
-                    <AppShell>{children}</AppShell>
-                  </AppErrorBoundary>
-                </ToastProvider>
+                <ModulesProvider>
+                  <ToastProvider>
+                    <AppErrorBoundary>
+                      <UpdateBanner />
+                      <AppShell>{children}</AppShell>
+                    </AppErrorBoundary>
+                  </ToastProvider>
+                </ModulesProvider>
               </BrandingProvider>
             </ClientIdProvider>
           </AuthProvider>

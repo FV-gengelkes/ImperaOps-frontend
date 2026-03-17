@@ -724,3 +724,17 @@ export type UpsertReportScheduleRequest = {
   dayOfMonth: number;
   isEnabled: boolean;
 };
+
+// ── Modules ──────────────────────────────────────────────────────────────────
+
+export type ModuleDefinitionDto = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+};
+
+export type ClientModulesDto = {
+  enabledModuleIds: string[];
+};

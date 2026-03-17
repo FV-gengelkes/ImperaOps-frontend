@@ -59,6 +59,8 @@ import type {
   WorkflowTransitionDto,
   ReportScheduleDto,
   UpsertReportScheduleRequest,
+  ModuleDefinitionDto,
+  ClientModulesDto,
 } from "./types";
 
 export type { BulkDeleteEventRequest, BulkUpdateEventRequest };
@@ -1376,4 +1378,25 @@ export async function deleteApiCredential(clientId: number, id: number): Promise
 
 export async function getApiCredentialAudit(clientId: number, id: number): Promise<ApiCredentialAuditLogDto[]> {
   return http<ApiCredentialAuditLogDto[]>(`/api/v1/clients/${clientId}/api-credentials/${id}/audit`);
+}
+
+// ── Modules ──────────────────────────────────────────────────────────────────
+
+export async function getClientModules(clientId: number): Promise<ClientModulesDto> {
+  return http<ClientModulesDto>(`/api/v1/clients/${clientId}/modules`);
+}
+
+export async function adminGetModules(): Promise<ModuleDefinitionDto[]> {
+  return http<ModuleDefinitionDto[]>("/api/v1/admin/modules");
+}
+
+export async function adminGetClientModules(clientId: number): Promise<ClientModulesDto> {
+  return http<ClientModulesDto>(`/api/v1/admin/clients/${clientId}/modules`);
+}
+
+export async function adminUpdateClientModules(clientId: number, moduleIds: string[]): Promise<ClientModulesDto> {
+  return http<ClientModulesDto>(`/api/v1/admin/clients/${clientId}/modules`, {
+    method: "PUT",
+    body: JSON.stringify({ moduleIds }),
+  });
 }
